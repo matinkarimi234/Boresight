@@ -1,12 +1,16 @@
 import numpy as np  # Ensure numpy is imported first.
 from dispmanx import DispmanX
 import time
+import json
+import os
 from picamera import PiCamera
 from gpiozero import Button
 
 # Desired overlay resolution (sensor native crop)
 DESIRED_OVERLAY_RES = (1920, 1080)  # (width, height)
 ov_width, ov_height = DESIRED_OVERLAY_RES
+
+OFFSET_FILE = "overlay_offset.json"
 
 def update_overlay_image(buf, horizontal_y, vertical_x, thickness=2):
     """
@@ -23,6 +27,30 @@ def update_overlay_image(buf, horizontal_y, vertical_x, thickness=2):
     buf[horizontal_y:horizontal_y+thickness, :, :] = [255, 0, 0, 255]
     # Draw vertical line.
     buf[:, vertical_x:vertical_x+thickness, :] = [255, 0, 0, 255]
+
+def load_offset():
+    """Load crosshair offset from file if available; otherwise return center positions."""
+    if os.path.exists(OFFSET_FILE):
+        try:
+            with open(OFFSET_FILE, "r") as f:
+                offset_data = json.load(f)
+            horizontal_y = offset_data.get("horizontal_y", DESIRED_OVERLAY_RES[1] // 2)
+            vertical_x = offset_data.get("vertical_x", DESIRED_OVERLAY_RES[0] // 2)
+            print("Loaded saved offset:", horizontal_y, vertical_x)
+            return horizontal_y, vertical_x
+        except Exception as e:
+            print("Error reading offset file, using defaults:", e)
+    # Default: center of overlay.
+    return DESIRED_OVERLAY_RES[1] // 2, DESIRED_OVERLAY_RES[0] // 2
+
+def save_offset(horizontal_y, vertical_x):
+    """Save the current crosshair offset to file."""
+    try:
+        with open(OFFSET_FILE, "w") as f:
+            json.dump({"horizontal_y": horizontal_y, "vertical_x": vertical_x}, f)
+        print("Saved offset:", horizontal_y, vertical_x)
+    except Exception as e:
+        print("Error saving offset:", e)
 
 def main():
     # --- Start PiCamera Preview ---
@@ -55,9 +83,8 @@ def main():
     # Create the overlay image buffer.
     overlay_image = np.zeros((DESIRED_OVERLAY_RES[1], DESIRED_OVERLAY_RES[0], 4), dtype=np.uint8)
 
-    # Initial crosshair positions relative to the overlay image.
-    horizontal_y = DESIRED_OVERLAY_RES[1] // 2
-    vertical_x = DESIRED_OVERLAY_RES[0] // 2
+    # --- Load initial crosshair positions ---
+    horizontal_y, vertical_x = load_offset()
 
     # Draw the initial overlay image.
     update_overlay_image(overlay_image, horizontal_y, vertical_x)
@@ -121,13 +148,19 @@ def main():
     button_up.when_pressed = on_up
     button_down.when_pressed = on_down
 
-    # Main loop to keep the program running.
+    # Main loop with periodic saving every 10 seconds.
+    last_save_time = time.time()
     try:
         while True:
             time.sleep(0.1)
+            if time.time() - last_save_time >= 10:
+                save_offset(horizontal_y, vertical_x)
+                last_save_time = time.time()
     except KeyboardInterrupt:
         print("Exiting...")
     finally:
+        # Save one last time on exit.
+        save_offset(horizontal_y, vertical_x)
         camera.stop_preview()
         camera.close()
 
