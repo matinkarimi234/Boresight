@@ -1,0 +1,6 @@
+scp -P 22 "C:\Projects\Boresight\RPI_Zero2\Boresight_V2.py" boresight@10.1.1.75:/home/boresight
+
+
+g++ -D_FILE_OFFSET_BITS=64 -std=c++17 -I /home/pouyeshgar/libcamera/include -I /usr/include/drm -o overlay overlay.cpp -ldrm -lcamhal
+
+pscp -P 22 boresight@10.1.1.75:/home/boresight/video.h264 C:\Users\TIR\Desktop
