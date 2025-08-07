@@ -15,9 +15,9 @@ class ButtonControl:
         self.state_update_callback = state_update_callback
 
         # Setup GPIO buttons
-        self.button_left_up = Button(14)
-        self.button_ok = Button(15)
-        self.button_right_down = Button(18)
+        self.button_left_up = Button(14,pull_up = False)
+        self.button_ok = Button(15,pull_up = False)
+        self.button_right_down = Button(18,pull_up = False)
 
         # Attach callbacks to button press events
         self.button_left_up.when_pressed = self.on_left_or_up

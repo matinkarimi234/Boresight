@@ -59,15 +59,15 @@ def main():
             current_state = state_machine.get_state()
 
             if current_state == StateMachineEnum.START_UP_STATE:
-                buzzer_control.toggle_buzzer(2,1,1)
-                buzzer_control.toggle_buzzer(1,1,2)
+                buzzer_control.toggle_buzzer(0.25,1,1)
+                buzzer_control.toggle_buzzer(0.1,1,2)
                 state_machine.change_state(StateMachineEnum.NORMAL_STATE)
 
             elif current_state == StateMachineEnum.NORMAL_STATE:
                 if ok_button_press_duration >= 3: # 3 Seconds Pressed
                         ok_button_press_duration = 0
                         state_machine.change_state(StateMachineEnum.HORIZONTAL_ADJUSTMENT)
-                        buzzer_control.toggle_buzzer(2,1,1)
+                        buzzer_control.toggle_buzzer(0.5,1,1)
 
             elif current_state == StateMachineEnum.RECORD_STATE:
                 pass
