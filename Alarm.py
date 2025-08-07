@@ -23,10 +23,10 @@ class LEDControl:
             if repeat_count and count >= repeat_count:
                 break  # Stop after repeating the specified number of times
             self.led.on()
-            print(f"LED ON")
+            #print(f"LED ON")
             sleep(on_time)
             self.led.off()
-            print(f"LED OFF")
+            #print(f"LED OFF")
             sleep(off_time)
             count += 1
 
@@ -65,10 +65,10 @@ class BuzzerControl:
             if repeat_count and count >= repeat_count:
                 break  # Stop after repeating the specified number of times
             self.buzzer.on()
-            print(f"Buzzer ON")
+            #print(f"Buzzer ON")
             sleep(on_time)
             self.buzzer.off()
-            print(f"Buzzer OFF")
+            #print(f"Buzzer OFF")
             sleep(off_time)
             count += 1
 
