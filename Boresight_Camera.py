@@ -1,5 +1,4 @@
 import threading
-from soupsieve import match
 from Button_Control import ButtonControl
 from Camera_Setup import CameraSetup
 from Overlay_Display import OverlayDisplay
@@ -19,7 +18,7 @@ def buttons_state_update_callback(flag):
         # Start a timer when the button is pressed
         ok_button_press_start_time = time.time()
         print("OK button pressed")
-        
+
     elif flag == ButtonControl.OK_RELEASED:
         print("OK button released")
         if ok_button_press_start_time:
@@ -30,7 +29,7 @@ def buttons_state_update_callback(flag):
 def main():
     global ok_button_press_duration
     led_control = LEDControl(23)
-    buzzer_control = BuzzerControl(40)
+    buzzer_control = BuzzerControl(21)
 
     # Initialize state machine
     state_machine = StateMachine()

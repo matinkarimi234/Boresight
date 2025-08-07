@@ -11,8 +11,7 @@ class ButtonControl:
 
 
 
-    def __init__(self, state_machine, state_update_callback):
-        self.state_machine = state_machine
+    def __init__(self, state_update_callback):
         self.state_update_callback = state_update_callback
 
         # Setup GPIO buttons
@@ -37,7 +36,7 @@ class ButtonControl:
     def on_right_or_down(self):
         """Move the crosshair right/down."""
         self.state_update_callback(ButtonControl.RIGHT_DOWN_BUTTON_PRESSED)
-        
+
     def on_right_or_down_released(self):
         self.state_update_callback(ButtonControl.RIGHT_DOWN_BUTTON_RELEASED)
 
