@@ -27,7 +27,6 @@ def buttons_state_update_callback(flag):
             ok_button_press_start_time = None  # Reset the timer after release
 
 def main():
-    global ok_button_press_duration
     led_control = LEDControl(23)
     buzzer_control = BuzzerControl(21)
 
@@ -54,11 +53,14 @@ def main():
 
     # Create a thread for running the state machine
     def state_machine_thread():
+        global ok_button_press_duration
         while state_machine.running:
             # Here we can add actions based on the state
             current_state = state_machine.get_state()
 
             if current_state == StateMachineEnum.START_UP_STATE:
+                buzzer_control.toggle_buzzer(2,1,1)
+                buzzer_control.toggle_buzzer(1,1,2)
                 state_machine.change_state(StateMachineEnum.NORMAL_STATE)
 
             elif current_state == StateMachineEnum.NORMAL_STATE:
