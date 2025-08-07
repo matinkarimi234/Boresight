@@ -74,10 +74,16 @@ def main():
 
             elif current_state == StateMachineEnum.HORIZONTAL_ADJUSTMENT:
                 led_control.start_toggle(1, 1)
-                print("Adjusting horizontally...")
+                if ok_button_press_duration > 0: # ok button just pressed
+                    buzzer_control.toggle_buzzer(0.25,1,1)
+                    state_machine.change_state(StateMachineEnum.VERTICAL_ADJUSTMENT)
 
             elif current_state == StateMachineEnum.VERTICAL_ADJUSTMENT:
-                pass
+                if ok_button_press_duration > 0: # ok button just pressed
+                    led_control.stop()
+                    buzzer_control.toggle_buzzer(0.5,1,1)
+                    state_machine.change_state(StateMachineEnum.NORMAL_STATE)
+
             elif current_state == StateMachineEnum.SAVING_VIDEO_STATE:
                 pass
             time.sleep(0.125)
