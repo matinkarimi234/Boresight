@@ -27,6 +27,7 @@ def buttons_state_update_callback(flag):
                 ok_button_press_start_time = None  # Reset the timer after release
 
 def main():
+    global ok_button_press_duration
     led_control = LEDControl(23)
     buzzer_control = BuzzerControl(40)
 
