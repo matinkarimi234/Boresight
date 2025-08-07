@@ -59,8 +59,8 @@ def main():
             current_state = state_machine.get_state()
 
             if current_state == StateMachineEnum.START_UP_STATE:
-                buzzer_control.toggle_buzzer(0.25,1,1)
-                buzzer_control.toggle_buzzer(0.1,1,2)
+                buzzer_control.toggle_buzzer(0.25,0.25,1)
+                buzzer_control.toggle_buzzer(0.1,0.1,2)
                 state_machine.change_state(StateMachineEnum.NORMAL_STATE)
 
             elif current_state == StateMachineEnum.NORMAL_STATE:
