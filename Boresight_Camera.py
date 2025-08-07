@@ -75,11 +75,13 @@ def main():
             elif current_state == StateMachineEnum.HORIZONTAL_ADJUSTMENT:
                 led_control.start_toggle(1, 1)
                 if ok_button_press_duration > 0: # ok button just pressed
+                    ok_button_press_duration = 0
                     buzzer_control.toggle_buzzer(0.25,1,1)
                     state_machine.change_state(StateMachineEnum.VERTICAL_ADJUSTMENT)
 
             elif current_state == StateMachineEnum.VERTICAL_ADJUSTMENT:
                 if ok_button_press_duration > 0: # ok button just pressed
+                    ok_button_press_duration = 0
                     led_control.stop()
                     buzzer_control.toggle_buzzer(0.5,1,1)
                     state_machine.change_state(StateMachineEnum.NORMAL_STATE)
