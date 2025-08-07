@@ -6,11 +6,10 @@ import os
 from picamera import PiCamera
 from gpiozero import Button
 
-# Desired overlay resolution (sensor native crop)
-DESIRED_OVERLAY_RES = (1920, 1080)  # (width, height)
-ov_width, ov_height = DESIRED_OVERLAY_RES
+# Default desired overlay resolution (sensor native crop)
+DESIRED_OVERLAY_RES = (1280, 720)  # (width, height)
 
-OFFSET_FILE = "overlay_offset.json"
+OFFSET_FILE = "~/Saved_Videos/overlay_offset.json"
 
 def update_overlay_image(buf, horizontal_y, vertical_x, thickness=2):
     """
@@ -56,11 +55,11 @@ def main():
     # --- Start PiCamera Preview ---
     camera = PiCamera()
     # Set resolution to match the overlay size.
-    camera.resolution = DESIRED_OVERLAY_RES
+    camera.resolution = (1640, 922) #DESIRED_OVERLAY_RES
     # Use sensor_mode 1 for a native 16:9 crop (if lighting permits).
-    camera.sensor_mode = 1
+    camera.sensor_mode = 5 #Almost Fullframe Mode
     # Set ISO low to reduce noise.
-    camera.iso = 100
+    camera.iso = 800
     # Set a high framerate for low latency.
     camera.framerate = 60
     # Use a fast exposure mode (e.g., 'sports') to reduce motion blur.
@@ -76,12 +75,26 @@ def main():
     disp_width, disp_height = disp.size  # Full display resolution
     print("Display resolution:", disp_width, disp_height)
 
+    # Scale the overlay resolution to fit the monitor while maintaining aspect ratio
+    aspect_ratio = DESIRED_OVERLAY_RES[0] / DESIRED_OVERLAY_RES[1]
+    if disp_width / disp_height > aspect_ratio:
+        # Scale based on width
+        new_width = disp_width
+        new_height = int(new_width / aspect_ratio)
+    else:
+        # Scale based on height
+        new_height = disp_height
+        new_width = int(new_height * aspect_ratio)
+    
+    overlay_res = (new_width, new_height)
+    print("Scaled overlay resolution:", overlay_res)
+
     # Calculate the offset to center the overlay region.
-    offset_x = (disp_width - DESIRED_OVERLAY_RES[0]) // 2
-    offset_y = (disp_height - DESIRED_OVERLAY_RES[1]) // 2
+    offset_x = (disp_width - overlay_res[0]) // 2
+    offset_y = (disp_height - overlay_res[1]) // 2
 
     # Create the overlay image buffer.
-    overlay_image = np.zeros((DESIRED_OVERLAY_RES[1], DESIRED_OVERLAY_RES[0], 4), dtype=np.uint8)
+    overlay_image = np.zeros((overlay_res[1], overlay_res[0], 4), dtype=np.uint8)
 
     # --- Load initial crosshair positions ---
     horizontal_y, vertical_x = load_offset()
@@ -89,8 +102,8 @@ def main():
     # Draw the initial overlay image.
     update_overlay_image(overlay_image, horizontal_y, vertical_x)
     # Copy it into the center of the DispmanX buffer.
-    disp.buffer[offset_y:offset_y+DESIRED_OVERLAY_RES[1],
-                offset_x:offset_x+DESIRED_OVERLAY_RES[0], :] = overlay_image
+    disp.buffer[offset_y:offset_y+overlay_res[1],
+                offset_x:offset_x+overlay_res[0], :] = overlay_image
     disp.update()
 
     print("Push Button Control:")
@@ -102,9 +115,9 @@ def main():
 
     # --- Setup gpiozero Push Buttons ---
     button_left = Button(5)
-    button_down = Button(6)
-    button_right = Button(24)
-    button_up = Button(23)
+    button_down = Button(14)
+    button_right = Button(18)
+    button_up = Button(15)
 
     # Define movement step size.
     step = 10
@@ -114,32 +127,32 @@ def main():
         nonlocal vertical_x, horizontal_y, overlay_image
         vertical_x = max(0, vertical_x - step)
         update_overlay_image(overlay_image, horizontal_y, vertical_x)
-        disp.buffer[offset_y:offset_y+DESIRED_OVERLAY_RES[1],
-                    offset_x:offset_x+DESIRED_OVERLAY_RES[0], :] = overlay_image
+        disp.buffer[offset_y:offset_y+overlay_res[1],
+                    offset_x:offset_x+overlay_res[0], :] = overlay_image
         disp.update()
 
     def on_right():
         nonlocal vertical_x, horizontal_y, overlay_image
-        vertical_x = min(DESIRED_OVERLAY_RES[0]-1, vertical_x + step)
+        vertical_x = min(overlay_res[0]-1, vertical_x + step)
         update_overlay_image(overlay_image, horizontal_y, vertical_x)
-        disp.buffer[offset_y:offset_y+DESIRED_OVERLAY_RES[1],
-                    offset_x:offset_x+DESIRED_OVERLAY_RES[0], :] = overlay_image
+        disp.buffer[offset_y:offset_y+overlay_res[1],
+                    offset_x:offset_x+overlay_res[0], :] = overlay_image
         disp.update()
 
     def on_up():
         nonlocal horizontal_y, vertical_x, overlay_image
         horizontal_y = max(0, horizontal_y - step)
         update_overlay_image(overlay_image, horizontal_y, vertical_x)
-        disp.buffer[offset_y:offset_y+DESIRED_OVERLAY_RES[1],
-                    offset_x:offset_x+DESIRED_OVERLAY_RES[0], :] = overlay_image
+        disp.buffer[offset_y:offset_y+overlay_res[1],
+                    offset_x:offset_x+overlay_res[0], :] = overlay_image
         disp.update()
 
     def on_down():
         nonlocal horizontal_y, vertical_x, overlay_image
-        horizontal_y = min(DESIRED_OVERLAY_RES[1]-1, horizontal_y + step)
+        horizontal_y = min(overlay_res[1]-1, horizontal_y + step)
         update_overlay_image(overlay_image, horizontal_y, vertical_x)
-        disp.buffer[offset_y:offset_y+DESIRED_OVERLAY_RES[1],
-                    offset_x:offset_x+DESIRED_OVERLAY_RES[0], :] = overlay_image
+        disp.buffer[offset_y:offset_y+overlay_res[1],
+                    offset_x:offset_x+overlay_res[0], :] = overlay_image
         disp.update()
 
     # Attach callbacks to button press events.
