@@ -71,14 +71,14 @@ def main():
             tick = 0.125  # default tick (slower when not adjusting)
 
             if current_state == StateMachineEnum.START_UP_STATE:
-                buzzer_control.toggle_buzzer(0.25, 0.25, 1)
-                buzzer_control.toggle_buzzer(0.1, 0.1, 2)
+                buzzer_control.start_toggle(0.25, 0.25, 1)
+                buzzer_control.start_toggle(0.1, 0.1, 2)
                 state_machine.change_state(StateMachineEnum.NORMAL_STATE)
 
             elif current_state == StateMachineEnum.NORMAL_STATE:
                 if ok_button_press_duration >= 3:  # long-press OK to enter H adjust
                     ok_button_press_duration = 0
-                    buzzer_control.toggle_buzzer(0.5, 1, 1)
+                    buzzer_control.start_toggle(0.5, 1, 1)
                     state_machine.change_state(StateMachineEnum.HORIZONTAL_ADJUSTMENT)
                     led_control.start_toggle(0.5, 0.5)
 
@@ -98,7 +98,7 @@ def main():
                 # short-press OK to switch to vertical adjust
                 if ok_button_press_duration > 0:
                     ok_button_press_duration = 0
-                    buzzer_control.toggle_buzzer(0.25, 1, 1)
+                    buzzer_control.start_toggle(0.25, 1, 1)
                     state_machine.change_state(StateMachineEnum.VERTICAL_ADJUSTMENT)
 
             elif current_state == StateMachineEnum.VERTICAL_ADJUSTMENT:
@@ -115,7 +115,7 @@ def main():
                 if ok_button_press_duration > 0:
                     ok_button_press_duration = 0
                     led_control.stop()
-                    buzzer_control.toggle_buzzer(0.5, 1, 1)
+                    buzzer_control.start_toggle(0.5, 1, 1)
                     state_machine.change_state(StateMachineEnum.NORMAL_STATE)
 
             elif current_state == StateMachineEnum.SAVING_VIDEO_STATE:
