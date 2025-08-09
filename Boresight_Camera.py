@@ -1,7 +1,7 @@
 import threading
 from Button_Control import ButtonControl
 from Camera_Setup import CameraSetup
-from Overlay_Display import OverlayDisplay, StaticPNGOverlay
+from Overlay_Display import OverlayDisplay, StaticPNGOverlay, TextOverlay
 from State_Machine import StateMachine, StateMachineEnum
 from Alarm import BuzzerControl, LEDControl
 import time
@@ -52,6 +52,13 @@ def main():
     camera = CameraSetup()
     camera.start_preview()  # Start the camera preview
 
+    # Create overlays
+    state_overlay = TextOverlay(layer=1998,
+                                font_path="Fonts/digital-7.ttf",
+                                font_size=24,
+                                pos=('right', 'top'),
+                                color=(255, 255, 0, 255))
+
     static_png = StaticPNGOverlay("Pictures/Farand_Logo.png", layer=1999,
                               pos=('left','top'),  # or numbers like (50, 30)
                               scale=1)                # or (width, height)
@@ -79,12 +86,14 @@ def main():
                 buzzer_control.start_toggle(0.25, 0.25, 1)
                 buzzer_control.start_toggle(0.1, 0.1, 2)
                 state_machine.change_state(StateMachineEnum.NORMAL_STATE)
+                state_overlay.set_text("LIVE")
 
             elif current_state == StateMachineEnum.NORMAL_STATE:
                 if ok_button_press_duration >= 3:  # long-press OK to enter H adjust
                     ok_button_press_duration = 0
                     buzzer_control.start_toggle(0.5, 1, 1)
                     state_machine.change_state(StateMachineEnum.HORIZONTAL_ADJUSTMENT)
+                    state_overlay.set_text("Horizontal ADJ.")
                     led_control.start_toggle(0.5, 0.5)
 
             elif current_state == StateMachineEnum.RECORD_STATE:
@@ -104,6 +113,7 @@ def main():
                 if ok_button_press_duration > 0:
                     ok_button_press_duration = 0
                     buzzer_control.start_toggle(0.25, 1, 1)
+                    state_overlay.set_text("Vertical ADJ.")
                     state_machine.change_state(StateMachineEnum.VERTICAL_ADJUSTMENT)
 
             elif current_state == StateMachineEnum.VERTICAL_ADJUSTMENT:
@@ -121,6 +131,7 @@ def main():
                     ok_button_press_duration = 0
                     led_control.stop()
                     buzzer_control.start_toggle(0.5, 1, 1)
+                    state_overlay.set_text("LIVE")
                     state_machine.change_state(StateMachineEnum.NORMAL_STATE)
 
             elif current_state == StateMachineEnum.SAVING_VIDEO_STATE:

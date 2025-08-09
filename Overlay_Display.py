@@ -1,7 +1,7 @@
 import numpy as np
 import json, os
 from dispmanx import DispmanX
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 class OverlayDisplay:
     OFFSET_FILE = "~/Saved_Videos/overlay_offset.json"
@@ -112,5 +112,33 @@ class StaticPNGOverlay:
 
     def hide(self):
         self.disp.buffer[:] = 0
+        self.disp.update()
+
+class TextOverlay:
+    def __init__(self, layer, font_path, font_size, pos=('left', 'top'), color=(255,255,255,255)):
+        self.disp = DispmanX(pixel_format="RGBA", buffer_type="numpy", layer=layer)
+        self.disp_w, self.disp_h = self.disp.size
+        self.font = ImageFont.truetype(font_path, font_size)
+        self.color = color
+        self.pos = pos
+        self.last_text = None
+
+    def set_text(self, text):
+        if text == self.last_text:
+            return  # no change → no update
+        self.last_text = text
+
+        # Clear buffer
+        self.disp.buffer[:] = 0
+        img = Image.new('RGBA', (self.disp_w, self.disp_h), (0,0,0,0))
+        draw = ImageDraw.Draw(img)
+
+        # Get position
+        w, h = draw.textsize(text, font=self.font)
+        x = {'left': 0, 'center': (self.disp_w - w)//2, 'right': self.disp_w - w}.get(self.pos[0], self.pos[0])
+        y = {'top': 0, 'center': (self.disp_h - h)//2, 'bottom': self.disp_h - h}.get(self.pos[1], self.pos[1])
+
+        draw.text((x, y), text, font=self.font, fill=self.color)
+        self.disp.buffer[:] = np.array(img, dtype=np.uint8)
         self.disp.update()
 
