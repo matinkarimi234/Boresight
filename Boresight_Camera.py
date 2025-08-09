@@ -80,14 +80,12 @@ def main():
                     ok_button_press_duration = 0
                     buzzer_control.toggle_buzzer(0.5, 1, 1)
                     state_machine.change_state(StateMachineEnum.HORIZONTAL_ADJUSTMENT)
+                    led_control.start_toggle(0.5, 0.5)
 
             elif current_state == StateMachineEnum.RECORD_STATE:
                 pass
 
             elif current_state == StateMachineEnum.HORIZONTAL_ADJUSTMENT:
-                # indicate adjust mode if you like
-                led_control.start_toggle(1, 1)
-
                 # Move vertical line left/right
                 if button_left_up_pressed:
                     overlay_display.nudge_vertical(-STEP)   # left
