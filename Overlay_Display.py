@@ -75,6 +75,7 @@ class StaticPNGOverlay:
         self.disp = DispmanX(pixel_format="RGBA", buffer_type="numpy", layer=layer)
         self.disp_w, self.disp_h = self.disp.size
         self.offset = offset
+        self.pos = pos
 
         im = Image.open(png_path).convert('RGBA')
         if scale is not None:
