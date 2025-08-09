@@ -56,20 +56,23 @@ def main():
 
     clock_overlay = TextOverlay(layer=1997,
                         font_path="Fonts/digital-7.ttf",
-                        font_size=24,
+                        font_size=36,
                         pos=('left', 'bottom'),
-                        color=(255, 255, 0, 255))
+                        color=(130, 0, 0, 255),
+                        offset=20)
     
     state_overlay = TextOverlay(layer=1998,
                         font_path="Fonts/digital-7.ttf",
-                        font_size=24,
+                        font_size=36,
                         pos=('right', 'top'),
-                        color=(255, 255, 0, 255))
+                        color=(130, 0, 0, 255),
+                        offset=20)
     
 
     static_png = StaticPNGOverlay("Pictures/Farand_Logo.png", layer=1999,
                               pos=('left','top'),  # or numbers like (50, 30)
-                              scale=1)                # or (width, height)
+                              scale=0.5,
+                              offset=20)                # or (width, height)
     static_png.show()  # draws once and done
 
     # --- Initialize Overlay Display ---
@@ -84,7 +87,7 @@ def main():
     def state_machine_thread():
         global ok_button_press_duration, button_left_up_pressed, button_right_down_pressed
 
-        STEP = 10  # pixels per tick; tweak as you like
+        STEP = 1  # pixels per tick; tweak as you like
 
         while state_machine.running:
             current_state = state_machine.get_state()

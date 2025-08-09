@@ -20,13 +20,13 @@ class OverlayDisplay:
 
         self.horizontal_y, self.vertical_x = self.load_offset()
 
-    def update_overlay_image(self, horizontal_y, vertical_x, thickness=2):
+    def update_overlay_image(self, horizontal_y, vertical_x, thickness=0.5):
         self.overlay_image.fill(0)
         H, W, _ = self.overlay_image.shape
         y = max(0, min(H - thickness, horizontal_y))
         x = max(0, min(W - thickness, vertical_x))
-        self.overlay_image[y:y+thickness, :, :] = [255, 0, 0, 255]
-        self.overlay_image[:, x:x+thickness, :] = [255, 0, 0, 255]
+        self.overlay_image[y:y+thickness, :, :] = [130, 0, 0, 255]
+        self.overlay_image[:, x:x+thickness, :] = [130, 0, 0, 255]
 
     def refresh(self):
         """Redraw lines and push the centered bitmap to the display."""
@@ -71,9 +71,10 @@ class OverlayDisplay:
 
 
 class StaticPNGOverlay:
-    def __init__(self, png_path, layer=1999, pos=('left', 'top'), scale=None):
+    def __init__(self, png_path, layer=1999, pos=('left', 'top'), scale=None, offset=20):
         self.disp = DispmanX(pixel_format="RGBA", buffer_type="numpy", layer=layer)
         self.disp_w, self.disp_h = self.disp.size
+        self.offset = offset
 
         im = Image.open(png_path).convert('RGBA')
         if scale is not None:
@@ -92,8 +93,21 @@ class StaticPNGOverlay:
         H, W, _ = self.img.shape
 
         # position: accepts pixel ints or ('left'|'center'|'right', 'top'|'center'|'bottom')
-        x = {'left': 0, 'center': (self.disp_w - W)//2, 'right': self.disp_w - W}.get(pos[0], pos[0])
-        y = {'top': 0, 'center': (self.disp_h - H)//2, 'bottom': self.disp_h - H}.get(pos[1], pos[1])
+        # Apply offset to each position mode
+        x_positions = {
+            'left': self.offset,
+            'center': (self.disp_w - W) // 2,
+            'right': self.disp_w - W - self.offset
+        }
+        y_positions = {
+            'top': self.offset,
+            'center': (self.disp_h - H) // 2,
+            'bottom': self.disp_h - H - self.offset
+        }
+
+        # Compute position
+        x = x_positions.get(self.pos[0], self.pos[0] + self.offset if isinstance(self.pos[0], int) else self.offset)
+        y = y_positions.get(self.pos[1], self.pos[1] + self.offset if isinstance(self.pos[1], int) else self.offset)
         self.x = int(max(min(x, self.disp_w - W), 0))
         self.y = int(max(min(y, self.disp_h - H), 0))
 
@@ -115,12 +129,13 @@ class StaticPNGOverlay:
         self.disp.update()
 
 class TextOverlay:
-    def __init__(self, layer, font_path, font_size, pos=('left', 'top'), color=(255,255,255,255)):
+    def __init__(self, layer, font_path, font_size, pos=('left', 'top'), color=(255,255,255,255), offset=20):
         self.disp = DispmanX(pixel_format="RGBA", buffer_type="numpy", layer=layer)
         self.disp_w, self.disp_h = self.disp.size
         self.font = ImageFont.truetype(font_path, font_size)
         self.color = color
         self.pos = pos
+        self.offset = offset
         self.last_text = None
 
     def set_text(self, text):
@@ -135,8 +150,20 @@ class TextOverlay:
 
         # Get position
         w, h = draw.textsize(text, font=self.font)
-        x = {'left': 0, 'center': (self.disp_w - w)//2, 'right': self.disp_w - w}.get(self.pos[0], self.pos[0])
-        y = {'top': 0, 'center': (self.disp_h - h)//2, 'bottom': self.disp_h - h}.get(self.pos[1], self.pos[1])
+        # Apply offset to each position mode
+        x_positions = {
+            'left': self.offset,
+            'center': (self.disp_w - w) // 2,
+            'right': self.disp_w - w - self.offset
+        }
+        y_positions = {
+            'top': self.offset,
+            'center': (self.disp_h - h) // 2,
+            'bottom': self.disp_h - h - self.offset
+}
+        # Compute position
+        x = x_positions.get(self.pos[0], self.pos[0] + self.offset if isinstance(self.pos[0], int) else self.offset)
+        y = y_positions.get(self.pos[1], self.pos[1] + self.offset if isinstance(self.pos[1], int) else self.offset)
 
         draw.text((x, y), text, font=self.font, fill=self.color)
         self.disp.buffer[:] = np.array(img, dtype=np.uint8)
