@@ -10,6 +10,9 @@ import time
 ok_button_press_start_time = None
 ok_button_press_duration = 0
 
+button_left_up_pressed = False
+button_right_down_pressed = False
+
 def buttons_state_update_callback(flag):
     global ok_button_press_duration, ok_button_press_start_time
     """Callback to receive flags from ButtonControl."""
@@ -25,6 +28,19 @@ def buttons_state_update_callback(flag):
             ok_button_press_duration = time.time() - ok_button_press_start_time
 
             ok_button_press_start_time = None  # Reset the timer after release
+
+
+    elif flag == ButtonControl.LEFT_UP_BUTTON_PRESSED:
+        button_left_up_pressed = True
+
+    elif flag == ButtonControl.LEFT_UP_BUTTON_RELEASED:
+        button_left_up_pressed = False
+
+    elif flag == ButtonControl.RIGHT_DOWN_BUTTON_PRESSED:
+        button_right_down_pressed = True
+        
+    elif flag == ButtonControl.RIGHT_DOWN_BUTTON_RELEASED:
+        button_right_down_pressed = False
 
 def main():
     led_control = LEDControl(23)
@@ -51,44 +67,93 @@ def main():
     button_control = ButtonControl(lambda flag: buttons_state_update_callback(flag))
 
 
-    # Create a thread for running the state machine
     def state_machine_thread():
-        global ok_button_press_duration
+        global ok_button_press_duration, button_left_up_pressed, button_right_down_pressed
+        nonlocal offset_x, offset_y
+
+        STEP = 10  # pixels per tick; tweak as you like
+
+        # boundaries for overlay movement
+        max_x = overlay_display.disp_width  - overlay_res[0]
+        max_y = overlay_display.disp_height - overlay_res[1]
+
         while state_machine.running:
-            # Here we can add actions based on the state
             current_state = state_machine.get_state()
+            tick = 0.125  # default tick (slower when not adjusting)
 
             if current_state == StateMachineEnum.START_UP_STATE:
-                buzzer_control.toggle_buzzer(0.25,0.25,1)
-                buzzer_control.toggle_buzzer(0.1,0.1,2)
+                buzzer_control.toggle_buzzer(0.25, 0.25, 1)
+                buzzer_control.toggle_buzzer(0.1, 0.1, 2)
                 state_machine.change_state(StateMachineEnum.NORMAL_STATE)
 
             elif current_state == StateMachineEnum.NORMAL_STATE:
-                if ok_button_press_duration >= 3: # 3 Seconds Pressed
-                        ok_button_press_duration = 0
-                        state_machine.change_state(StateMachineEnum.HORIZONTAL_ADJUSTMENT)
-                        buzzer_control.toggle_buzzer(0.5,1,1)
+                if ok_button_press_duration >= 3:  # long-press OK to enter H adjust
+                    ok_button_press_duration = 0
+                    buzzer_control.toggle_buzzer(0.5, 1, 1)
+                    state_machine.change_state(StateMachineEnum.HORIZONTAL_ADJUSTMENT)
 
             elif current_state == StateMachineEnum.RECORD_STATE:
                 pass
 
             elif current_state == StateMachineEnum.HORIZONTAL_ADJUSTMENT:
+                # blink LED to indicate adjust mode (your existing behavior)
                 led_control.start_toggle(1, 1)
-                if ok_button_press_duration > 0: # ok button just pressed
+
+                moved = False
+                # left/up -> move left
+                if button_left_up_pressed:
+                    new_x = max(0, offset_x - STEP)
+                    moved = moved or (new_x != offset_x)
+                    offset_x = new_x
+                # right/down -> move right
+                if button_right_down_pressed:
+                    new_x = min(max_x, offset_x + STEP)
+                    moved = moved or (new_x != offset_x)
+                    offset_x = new_x
+
+                if moved:
+                    overlay_display.update_overlay(offset_x, offset_y, overlay_res)
+
+                # faster loop in adjust mode
+                tick = 0.02
+
+                # short-press OK to switch to vertical adjust
+                if ok_button_press_duration > 0:
                     ok_button_press_duration = 0
-                    buzzer_control.toggle_buzzer(0.25,1,1)
+                    buzzer_control.toggle_buzzer(0.25, 1, 1)
                     state_machine.change_state(StateMachineEnum.VERTICAL_ADJUSTMENT)
 
             elif current_state == StateMachineEnum.VERTICAL_ADJUSTMENT:
-                if ok_button_press_duration > 0: # ok button just pressed
+                moved = False
+                # left/up -> move up
+                if button_left_up_pressed:
+                    new_y = max(0, offset_y - STEP)
+                    moved = moved or (new_y != offset_y)
+                    offset_y = new_y
+                # right/down -> move down
+                if button_right_down_pressed:
+                    new_y = min(max_y, offset_y + STEP)
+                    moved = moved or (new_y != offset_y)
+                    offset_y = new_y
+
+                if moved:
+                    overlay_display.update_overlay(offset_x, offset_y, overlay_res)
+
+                # faster loop in adjust mode
+                tick = 0.02
+
+                # short-press OK to exit to normal
+                if ok_button_press_duration > 0:
                     ok_button_press_duration = 0
                     led_control.stop()
-                    buzzer_control.toggle_buzzer(0.5,1,1)
+                    buzzer_control.toggle_buzzer(0.5, 1, 1)
                     state_machine.change_state(StateMachineEnum.NORMAL_STATE)
 
             elif current_state == StateMachineEnum.SAVING_VIDEO_STATE:
                 pass
-            time.sleep(0.125)
+
+            time.sleep(tick)
+
 
     # Start the state machine thread
     threading.Thread(target=state_machine_thread, daemon=True).start()
