@@ -69,13 +69,8 @@ def main():
 
     def state_machine_thread():
         global ok_button_press_duration, button_left_up_pressed, button_right_down_pressed
-        nonlocal offset_x, offset_y
 
         STEP = 10  # pixels per tick; tweak as you like
-
-        # boundaries for overlay movement
-        max_x = overlay_display.disp_width  - overlay_res[0]
-        max_y = overlay_display.disp_height - overlay_res[1]
 
         while state_machine.running:
             current_state = state_machine.get_state()
@@ -96,21 +91,14 @@ def main():
                 pass
 
             elif current_state == StateMachineEnum.HORIZONTAL_ADJUSTMENT:
+                # indicate adjust mode if you like
+                led_control.start_toggle(1, 1)
 
-                moved = False
-                # left/up -> move left
+                # Move vertical line left/right
                 if button_left_up_pressed:
-                    new_x = max(0, offset_x - STEP)
-                    moved = moved or (new_x != offset_x)
-                    offset_x = new_x
-                # right/down -> move right
+                    overlay_display.nudge_vertical(-STEP)   # left
                 if button_right_down_pressed:
-                    new_x = min(max_x, offset_x + STEP)
-                    moved = moved or (new_x != offset_x)
-                    offset_x = new_x
-
-                if moved:
-                    overlay_display.update_overlay(offset_x, offset_y, overlay_res)
+                    overlay_display.nudge_vertical(+STEP)   # right
 
                 # faster loop in adjust mode
                 tick = 0.02
@@ -122,20 +110,11 @@ def main():
                     state_machine.change_state(StateMachineEnum.VERTICAL_ADJUSTMENT)
 
             elif current_state == StateMachineEnum.VERTICAL_ADJUSTMENT:
-                moved = False
-                # left/up -> move up
+                # Move horizontal line up/down
                 if button_left_up_pressed:
-                    new_y = max(0, offset_y - STEP)
-                    moved = moved or (new_y != offset_y)
-                    offset_y = new_y
-                # right/down -> move down
+                    overlay_display.nudge_horizontal(-STEP)  # up
                 if button_right_down_pressed:
-                    new_y = min(max_y, offset_y + STEP)
-                    moved = moved or (new_y != offset_y)
-                    offset_y = new_y
-
-                if moved:
-                    overlay_display.update_overlay(offset_x, offset_y, overlay_res)
+                    overlay_display.nudge_horizontal(+STEP)  # down
 
                 # faster loop in adjust mode
                 tick = 0.02

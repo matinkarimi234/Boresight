@@ -1,64 +1,68 @@
 import numpy as np
-import json
-import os
+import json, os
 from dispmanx import DispmanX
-import time
 
 class OverlayDisplay:
-    OFFSET_FILE = "~/Saved_Videos/overlay_offset.json"  # File path for storing offset
+    OFFSET_FILE = "~/Saved_Videos/overlay_offset.json"
 
     def __init__(self, desired_res=(1280, 720)):
-        self.desired_res = desired_res
+        self.desired_res = desired_res  # (W, H)
         self.disp = DispmanX(pixel_format="RGBA", buffer_type="numpy", layer=2000)
         self.disp_width, self.disp_height = self.disp.size
+
+        # Our overlay bitmap is ALWAYS desired_res (no scaling here)
         self.overlay_image = np.zeros((self.desired_res[1], self.desired_res[0], 4), dtype=np.uint8)
-        
-        # Load initial offset from file
+
+        # Center this bitmap once on the display
+        self.offset_x = (self.disp_width  - self.desired_res[0]) // 2
+        self.offset_y = (self.disp_height - self.desired_res[1]) // 2
+
         self.horizontal_y, self.vertical_x = self.load_offset()
 
-    def scale_overlay(self):
-        aspect_ratio = self.desired_res[0] / self.desired_res[1]
-        if self.disp_width / self.disp_height > aspect_ratio:
-            new_width = self.disp_width
-            new_height = int(new_width / aspect_ratio)
-        else:
-            new_height = self.disp_height
-            new_width = int(new_height * aspect_ratio)
-        return (new_width, new_height)
+    def update_overlay_image(self, horizontal_y, vertical_x, thickness=2):
+        self.overlay_image.fill(0)
+        H, W, _ = self.overlay_image.shape
+        y = max(0, min(H - thickness, horizontal_y))
+        x = max(0, min(W - thickness, vertical_x))
+        self.overlay_image[y:y+thickness, :, :] = [255, 0, 0, 255]
+        self.overlay_image[:, x:x+thickness, :] = [255, 0, 0, 255]
 
-    def update_overlay(self, offset_x, offset_y, overlay_res):
-        """Update the overlay image buffer with the current crosshair positions."""
+    def refresh(self):
+        """Redraw lines and push the centered bitmap to the display."""
         self.update_overlay_image(self.horizontal_y, self.vertical_x)
-        self.disp.buffer[offset_y:offset_y+overlay_res[1], offset_x:offset_x+overlay_res[0], :] = self.overlay_image
+        y0, y1 = self.offset_y, self.offset_y + self.desired_res[1]
+        x0, x1 = self.offset_x, self.offset_x + self.desired_res[0]
+        self.disp.buffer[y0:y1, x0:x1, :] = self.overlay_image
         self.disp.update()
 
-    def update_overlay_image(self, horizontal_y, vertical_x, thickness=2):
-        """Draw the crosshair onto the overlay image buffer."""
-        self.overlay_image.fill(0)  # Clear the buffer (transparent background)
-        height, width, _ = self.overlay_image.shape
-        horizontal_y = max(0, min(height - thickness, horizontal_y))
-        vertical_x = max(0, min(width - thickness, vertical_x))
-        self.overlay_image[horizontal_y:horizontal_y+thickness, :, :] = [255, 0, 0, 255]  # Horizontal red line
-        self.overlay_image[:, vertical_x:vertical_x+thickness, :] = [255, 0, 0, 255]  # Vertical red line
+    # helpers to move the lines
+    def nudge_vertical(self, dx):   # move vertical line left/right
+        W = self.desired_res[0]
+        self.vertical_x = int(np.clip(self.vertical_x + dx, 0, W - 2))
+        self.refresh()
+
+    def nudge_horizontal(self, dy): # move horizontal line up/down
+        H = self.desired_res[1]
+        self.horizontal_y = int(np.clip(self.horizontal_y + dy, 0, H - 2))
+        self.refresh()
 
     def load_offset(self):
-        """Load crosshair offset from file if available; otherwise return center positions."""
-        if os.path.exists(self.OFFSET_FILE):
+        path = os.path.expanduser(self.OFFSET_FILE)
+        if os.path.exists(path):
             try:
-                with open(self.OFFSET_FILE, "r") as f:
-                    offset_data = json.load(f)
-                horizontal_y = offset_data.get("horizontal_y", self.desired_res[1] // 2)
-                vertical_x = offset_data.get("vertical_x", self.desired_res[0] // 2)
-                print("Loaded saved offset:", horizontal_y, vertical_x)
-                return horizontal_y, vertical_x
+                with open(path, "r") as f:
+                    d = json.load(f)
+                print("Loaded saved offset:", d.get("horizontal_y"), d.get("vertical_x"))
+                return d.get("horizontal_y", self.desired_res[1] // 2), d.get("vertical_x", self.desired_res[0] // 2)
             except Exception as e:
                 print("Error reading offset file, using defaults:", e)
-        return self.desired_res[1] // 2, self.desired_res[0] // 2  # Default: center of overlay.
+        return self.desired_res[1] // 2, self.desired_res[0] // 2
 
     def save_offset(self):
-        """Save the current crosshair offset to file."""
         try:
-            with open(self.OFFSET_FILE, "w") as f:
+            path = os.path.expanduser(self.OFFSET_FILE)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
                 json.dump({"horizontal_y": self.horizontal_y, "vertical_x": self.vertical_x}, f)
             print("Saved offset:", self.horizontal_y, self.vertical_x)
         except Exception as e:
