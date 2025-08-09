@@ -18,8 +18,7 @@ class ButtonControl:
         self.button_left_up = Button(14,pull_up = False)
         self.button_ok = Button(15,pull_up = False)
         self.button_right_down = Button(18,pull_up = False)
-        self.arrows_direction = "H" # Horizontal or Vertical (H,V)
-
+        
         # Attach callbacks to button press events
         self.button_left_up.when_pressed = self.on_left_or_up
         self.button_left_up.when_released = self.on_left_or_up_released

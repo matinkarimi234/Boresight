@@ -96,8 +96,6 @@ def main():
                 pass
 
             elif current_state == StateMachineEnum.HORIZONTAL_ADJUSTMENT:
-                # blink LED to indicate adjust mode (your existing behavior)
-                led_control.start_toggle(1, 1)
 
                 moved = False
                 # left/up -> move left
