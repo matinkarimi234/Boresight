@@ -20,7 +20,7 @@ class OverlayDisplay:
 
         self.horizontal_y, self.vertical_x = self.load_offset()
 
-    def update_overlay_image(self, horizontal_y, vertical_x, thickness=0.5):
+    def update_overlay_image(self, horizontal_y, vertical_x, thickness=1):
         self.overlay_image.fill(0)
         H, W, _ = self.overlay_image.shape
         y = max(0, min(H - thickness, horizontal_y))
