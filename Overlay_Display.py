@@ -1,6 +1,7 @@
 import numpy as np
 import json, os
 from dispmanx import DispmanX
+from PIL import Image
 
 class OverlayDisplay:
     OFFSET_FILE = "~/Saved_Videos/overlay_offset.json"
@@ -67,3 +68,49 @@ class OverlayDisplay:
             print("Saved offset:", self.horizontal_y, self.vertical_x)
         except Exception as e:
             print("Error saving offset:", e)
+
+
+class StaticPNGOverlay:
+    def __init__(self, png_path, layer=1999, pos=('left', 'top'), scale=None):
+        self.disp = DispmanX(pixel_format="RGBA", buffer_type="numpy", layer=layer)
+        self.disp_w, self.disp_h = self.disp.size
+
+        im = Image.open(png_path).convert('RGBA')
+        if scale is not None:
+            if isinstance(scale, tuple):  # exact size
+                im = im.resize(scale, Image.LANCZOS)
+            else:  # uniform scale factor
+                im = im.resize((int(im.width*scale), int(im.height*scale)), Image.LANCZOS)
+
+        # If you see halo artifacts, enable premultiplied alpha (commented out by default):
+        # arr = np.array(im, dtype=np.uint8)
+        # a = arr[...,3:4].astype(np.uint16)
+        # arr[...,0:3] = (arr[...,0:3].astype(np.uint16) * a // 255).astype(np.uint8)
+        # self.img = arr
+
+        self.img = np.array(im, dtype=np.uint8)
+        H, W, _ = self.img.shape
+
+        # position: accepts pixel ints or ('left'|'center'|'right', 'top'|'center'|'bottom')
+        x = {'left': 0, 'center': (self.disp_w - W)//2, 'right': self.disp_w - W}.get(pos[0], pos[0])
+        y = {'top': 0, 'center': (self.disp_h - H)//2, 'bottom': self.disp_h - H}.get(pos[1], pos[1])
+        self.x = int(max(min(x, self.disp_w - W), 0))
+        self.y = int(max(min(y, self.disp_h - H), 0))
+
+    def show(self):
+        # Start this layer fully transparent, then paste the PNG region only
+        self.disp.buffer[:] = 0
+        H, W, _ = self.img.shape
+        x0, y0 = self.x, self.y
+        x1, y1 = min(self.disp_w, x0+W), min(self.disp_h, y0+H)
+        sx0, sy0 = 0, 0
+        if x0 < 0: sx0 = -x0; x0 = 0
+        if y0 < 0: sy0 = -y0; y0 = 0
+        if x1 > x0 and y1 > y0:
+            self.disp.buffer[y0:y1, x0:x1, :] = self.img[sy0:sy0+(y1-y0), sx0:sx0+(x1-x0), :]
+        self.disp.update()  # one-time push
+
+    def hide(self):
+        self.disp.buffer[:] = 0
+        self.disp.update()
+

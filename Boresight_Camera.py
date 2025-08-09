@@ -1,7 +1,7 @@
 import threading
 from Button_Control import ButtonControl
 from Camera_Setup import CameraSetup
-from Overlay_Display import OverlayDisplay
+from Overlay_Display import OverlayDisplay, StaticPNGOverlay
 from State_Machine import StateMachine, StateMachineEnum
 from Alarm import BuzzerControl, LEDControl
 import time
@@ -51,6 +51,11 @@ def main():
     # --- Initialize Camera Setup ---
     camera = CameraSetup()
     camera.start_preview()  # Start the camera preview
+
+    static_png = StaticPNGOverlay("../Farand_Logo.png", layer=1999,
+                              pos=('left','top'),  # or numbers like (50, 30)
+                              scale=0.5)                # or (width, height)
+    static_png.show()  # draws once and done
 
     # --- Initialize Overlay Display ---
     overlay_display = OverlayDisplay()
