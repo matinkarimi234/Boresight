@@ -14,7 +14,7 @@ button_left_up_pressed = False
 button_right_down_pressed = False
 
 def buttons_state_update_callback(flag):
-    global ok_button_press_duration, ok_button_press_start_time
+    global ok_button_press_duration, ok_button_press_start_time, button_left_up_pressed, button_right_down_pressed
     """Callback to receive flags from ButtonControl."""
     
     if flag == ButtonControl.OK_PRESSED:
@@ -54,14 +54,8 @@ def main():
 
     # --- Initialize Overlay Display ---
     overlay_display = OverlayDisplay()
-    overlay_res = overlay_display.scale_overlay()
 
-    # Calculate the offset to center the overlay region.
-    offset_x = (overlay_display.disp_width - overlay_res[0]) // 2
-    offset_y = (overlay_display.disp_height - overlay_res[1]) // 2
-
-    # Draw the initial overlay with default offset
-    overlay_display.update_overlay(offset_x, offset_y, overlay_res)
+    overlay_display.refresh()
 
     # --- Initialize Button Control ---
     button_control = ButtonControl(lambda flag: buttons_state_update_callback(flag))
