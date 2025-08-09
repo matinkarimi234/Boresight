@@ -52,9 +52,9 @@ def main():
     camera = CameraSetup()
     camera.start_preview()  # Start the camera preview
 
-    static_png = StaticPNGOverlay("../Farand_Logo.png", layer=1999,
+    static_png = StaticPNGOverlay("../Pictures/Farand_Logo.png", layer=1999,
                               pos=('left','top'),  # or numbers like (50, 30)
-                              scale=0.5)                # or (width, height)
+                              scale=1)                # or (width, height)
     static_png.show()  # draws once and done
 
     # --- Initialize Overlay Display ---
