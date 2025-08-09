@@ -1,87 +1,85 @@
 from gpiozero import LED, Buzzer
-from time import sleep
 import threading
 
-class LEDControl:
+class _BlinkBase:
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._stop = threading.Event()
+        self._thread = None
+        self._on_time = 0.0
+        self._off_time = 0.0
+        self._repeat = None  # None = forever
+
+    def _loop(self, turn_on, turn_off):
+        count = 0
+        try:
+            while not self._stop.is_set():
+                # ON
+                turn_on()
+                if self._stop.wait(self._on_time):
+                    break
+
+                # OFF
+                turn_off()
+                if self._repeat is not None:
+                    count += 1
+                    if count >= self._repeat:
+                        break
+
+                if self._stop.wait(self._off_time):
+                    break
+        finally:
+            # Ensure device is OFF when exiting
+            try:
+                turn_off()
+            except Exception:
+                pass
+
+    def start_toggle(self, on_time, off_time, repeat_count=None):
+        """
+        Start blinking. Safe to call repeatedly; if already running,
+        it just updates timings and returns.
+        """
+        with self._lock:
+            self._on_time = float(on_time)
+            self._off_time = float(off_time)
+            self._repeat = repeat_count if (repeat_count is None) else int(repeat_count)
+
+            # Already running? Just update timings and bail.
+            if self._thread and self._thread.is_alive():
+                return
+
+            self._stop.clear()
+            self._thread = threading.Thread(target=self._run, daemon=True)
+            self._thread.start()
+
+    def stop(self, timeout=1.0):
+        """Stop blinking and wait for the thread to exit."""
+        with self._lock:
+            self._stop.set()
+            t = self._thread
+        if t:
+            t.join(timeout=timeout)
+        # Thread ensures device is off on exit.
+
+    # To be provided by subclass
+    def _run(self):
+        raise NotImplementedError
+
+
+class LEDControl(_BlinkBase):
     def __init__(self, pin):
-        """
-        Initialize the LEDControl object.
-        :param pin: The GPIO pin number where the LED is connected.
-        """
+        super().__init__()
         self.led = LED(pin)
-        self.running = False  # Flag to control the LED toggling
 
-    def toggle_led(self, on_time, off_time, repeat_count=None):
-        """
-        Start toggling the LED on/off every `on_time` and `off_time`.
-        :param on_time: Duration (seconds) to keep the LED ON.
-        :param off_time: Duration (seconds) to keep the LED OFF.
-        """
-        self.running = True
-        count = 0
-        while self.running:
-            if repeat_count and count >= repeat_count:
-                break  # Stop after repeating the specified number of times
-            self.led.on()
-            #print(f"LED ON")
-            sleep(on_time)
-            self.led.off()
-            #print(f"LED OFF")
-            sleep(off_time)
-            count += 1
+    def _run(self):
+        self._loop(self.led.on, self.led.off)
 
-    def start_toggle(self, on_time, off_time):
-        """
-        Start toggling the LED in a separate thread.
-        :param on_time: Duration (seconds) to keep the LED ON.
-        :param off_time: Duration (seconds) to keep the LED OFF.
-        """
-        threading.Thread(target=self.toggle_led, args=(on_time, off_time)).start()
 
-    def stop(self):
-        """Stop the LED toggling."""
-        self.running = False
-        self.led.off()
-        print("LED stopped")
-
-class BuzzerControl:
+class BuzzerControl(_BlinkBase):
     def __init__(self, pin):
-        """
-        Initialize the BuzzerControl object.
-        :param pin: The GPIO pin number where the buzzer is connected.
-        """
+        super().__init__()
         self.buzzer = Buzzer(pin)
-        self.running = False  # Flag to control the buzzer toggling
 
-    def toggle_buzzer(self, on_time, off_time, repeat_count=None):
-        """
-        Start toggling the buzzer on/off every `on_time` and `off_time`.
-        :param on_time: Duration (seconds) to keep the buzzer ON.
-        :param off_time: Duration (seconds) to keep the buzzer OFF.
-        """
-        self.running = True
-        count = 0
-        while self.running:
-            if repeat_count and count >= repeat_count:
-                break  # Stop after repeating the specified number of times
-            self.buzzer.on()
-            #print(f"Buzzer ON")
-            sleep(on_time)
-            self.buzzer.off()
-            #print(f"Buzzer OFF")
-            sleep(off_time)
-            count += 1
-
-    def start_toggle(self, on_time, off_time):
-        """
-        Start toggling the buzzer in a separate thread.
-        :param on_time: Duration (seconds) to keep the buzzer ON.
-        :param off_time: Duration (seconds) to keep the buzzer OFF.
-        """
-        threading.Thread(target=self.toggle_buzzer, args=(on_time, off_time)).start()
-
-    def stop(self):
-        """Stop the buzzer toggling."""
-        self.running = False
-        self.buzzer.off()
-        print("Buzzer stopped")
+    def _run(self):
+        self._loop(self.buzzer.on, self.buzzer.off)
