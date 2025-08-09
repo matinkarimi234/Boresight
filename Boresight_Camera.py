@@ -53,11 +53,19 @@ def main():
     camera.start_preview()  # Start the camera preview
 
     # Create overlays
+
+    clock_overlay = TextOverlay(layer=1997,
+                        font_path="Fonts/digital-7.ttf",
+                        font_size=24,
+                        pos=('left', 'bottom'),
+                        color=(255, 255, 0, 255))
+    
     state_overlay = TextOverlay(layer=1998,
-                                font_path="Fonts/digital-7.ttf",
-                                font_size=24,
-                                pos=('right', 'top'),
-                                color=(255, 255, 0, 255))
+                        font_path="Fonts/digital-7.ttf",
+                        font_size=24,
+                        pos=('right', 'top'),
+                        color=(255, 255, 0, 255))
+    
 
     static_png = StaticPNGOverlay("Pictures/Farand_Logo.png", layer=1999,
                               pos=('left','top'),  # or numbers like (50, 30)
@@ -143,18 +151,29 @@ def main():
     # Start the state machine thread
     threading.Thread(target=state_machine_thread, daemon=True).start()
 
-    # Main loop with periodic saving every 10 seconds
+    # replace the infinite main loop with this low-CPU version ---
     last_save_time = time.time()
+    last_sec = None
     try:
         while True:
-            time.sleep(0.125)
+            # Sleep a short time so main loop is responsive but not busy.
+            # We keep this loop independent from the state machine thread.
+            time.sleep(0.05)
+
+            # Clock updates only when the second changes (once per second)
+            now = time.strftime("%H:%M:%S")
+            if now != last_sec:
+                last_sec = now
+                clock_overlay.set_text(now)
+
+            # Periodically save offset every 10 seconds
             if time.time() - last_save_time >= 10:
                 overlay_display.save_offset()
                 last_save_time = time.time()
+
     except KeyboardInterrupt:
         print("Exiting...")
     finally:
-        # Save offset and stop the camera preview when exiting
         overlay_display.save_offset()
         camera.stop_preview()
         state_machine.stop()
