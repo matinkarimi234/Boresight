@@ -137,6 +137,7 @@ def main():
                     ok_button_press_duration = 0
                     buzzer_control.start_toggle(0.25, 1, 1)
                     led_control.stop()
+                    state_overlay.set_text("LIVE")
                     state_machine.change_state(StateMachineEnum.NORMAL_STATE)
 
             elif current_state == StateMachineEnum.HORIZONTAL_ADJUSTMENT:
