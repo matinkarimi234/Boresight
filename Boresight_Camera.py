@@ -97,7 +97,7 @@ def main():
 
 
     def state_machine_thread():
-        global ok_button_press_duration, button_left_up_pressed, button_right_down_pressed
+        global ok_button_press_duration, button_left_up_pressed, button_right_down_pressed, arrow_buttons_press_duration
 
         STEP = 1  # pixels per tick; tweak as you like
 
@@ -131,7 +131,7 @@ def main():
             elif current_state == StateMachineEnum.RECORD_STATE:
 
 
-                
+
                 if ok_button_press_duration > 0:
                     ok_button_press_duration = 0
                     buzzer_control.start_toggle(0.25, 1, 1)
