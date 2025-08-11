@@ -234,6 +234,17 @@ class TextOverlay:
         self._blink_stop = threading.Event()
         self._lock = threading.Lock()
 
+    @property
+    def last_text(self):
+        # thread-safe read for your RecordingManager callback
+        with self._lock:
+            return self._current_text
+
+    @last_text.setter
+    def last_text(self, value):
+        # keep compatibility if anything tries to set it
+        self.set_text(value)
+
     def _measure(self, draw, txt, font):
         if hasattr(draw, "textbbox"):
             l, t, r, b = draw.textbbox((0, 0), txt, font=font)
