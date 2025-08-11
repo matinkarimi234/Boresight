@@ -77,7 +77,7 @@ def main():
     overlay_display.set_style(radius=20, tick_length=300, ring_thickness=1, tick_thickness=1, gap=-10)
     overlay_display.refresh()
 
-    side_bars = ContainerOverlay(bar_width=60, layer=2001, alpha=50)
+    side_bars = ContainerOverlay(bar_width=150, layer=2001, alpha=150)
     side_bars.show()
 
     clock_overlay = TextOverlay(layer=2002,
