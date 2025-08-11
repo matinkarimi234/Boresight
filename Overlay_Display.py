@@ -218,16 +218,27 @@ class TextOverlay:
 
     def set_text(self, text):
         if text == self.last_text:
-            return  # no change → no update
+            return
         self.last_text = text
 
         # Clear buffer
         self.disp.buffer[:] = 0
-        img = Image.new('RGBA', (self.disp_w, self.disp_h), (0,0,0,0))
+        img = Image.new('RGBA', (self.disp_w, self.disp_h), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
 
-        # Get position
-        w, h = draw.textsize(text, font=self.font)
+        # Measure text (Pillow 10+: textbbox; fallback for older versions)
+        def measure(draw, txt, font):
+            if hasattr(draw, "textbbox"):
+                l, t, r, b = draw.textbbox((0, 0), txt, font=font)
+                return (r - l), (b - t)
+            # very old fallback
+            if hasattr(font, "getbbox"):
+                l, t, r, b = font.getbbox(txt)
+                return (r - l), (b - t)
+            return font.getsize(txt)  # last resort
+
+        w, h = measure(draw, text, self.font)
+
         # Apply offset to each position mode
         x_positions = {
             'left': self.offset,
@@ -238,7 +249,8 @@ class TextOverlay:
             'top': self.offset,
             'center': (self.disp_h - h) // 2,
             'bottom': self.disp_h - h - self.offset
-}
+        }
+
         # Compute position
         x = x_positions.get(self.pos[0], self.pos[0] + self.offset if isinstance(self.pos[0], int) else self.offset)
         y = y_positions.get(self.pos[1], self.pos[1] + self.offset if isinstance(self.pos[1], int) else self.offset)
