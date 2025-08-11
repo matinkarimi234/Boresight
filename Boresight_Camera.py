@@ -77,15 +77,17 @@ def main():
     overlay_display.set_style(radius=20, tick_length=300, ring_thickness=1, tick_thickness=1, gap=-10)
     overlay_display.refresh()
 
-    
-    clock_overlay = TextOverlay(layer=2001,
+    side_bars = ContainerOverlay(bar_width=60, layer=2001, alpha=50)
+    side_bars.show()
+
+    clock_overlay = TextOverlay(layer=2002,
                         font_path="Fonts/digital-7.ttf",
                         font_size=36,
                         pos=('left', 'bottom'),
                         color=(130, 0, 0, 255),
                         offset=20)
     
-    state_overlay = TextOverlay(layer=2002,
+    state_overlay = TextOverlay(layer=2003,
                         font_path="Fonts/digital-7.ttf",
                         rec_color=(130,0,0,255),
                         font_size=36,
@@ -94,14 +96,11 @@ def main():
                         offset=20)
     
 
-    static_png = StaticPNGOverlay("Pictures/Farand_Logo.png", layer=2003,
+    static_png = StaticPNGOverlay("Pictures/Farand_Logo.png", layer=2004,
                               pos=('left','top'),  # or numbers like (50, 30)
                               scale=0.5,
                               offset=20)                # or (width, height)
     static_png.show()  # draws once and done
-
-    side_bars = ContainerOverlay(bar_width=60, layer=2004, alpha=128)
-    side_bars.show()
 
 
     record_manager = RecordingManager(base_dir="/home/boresight/Saved_Videos")
