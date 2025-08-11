@@ -71,7 +71,10 @@ def main():
     camera.start_preview()  # Start the camera preview
 
     # Create overlays
+    side_bars = SideBarsOverlay(inner_size=(1280, 720), layer=1996, alpha=128)
+    side_bars.show()
 
+    
     clock_overlay = TextOverlay(layer=1997,
                         font_path="Fonts/digital-7.ttf",
                         font_size=36,
@@ -98,9 +101,6 @@ def main():
     overlay_display = OverlayDisplay()
     overlay_display.set_style(radius=20, tick_length=300, ring_thickness=1, tick_thickness=1, gap=-10)
     overlay_display.refresh()
-
-    side_bars = SideBarsOverlay(inner_size=overlay_display.desired_res, layer=1996, alpha=128)
-    side_bars.show()
 
     record_manager = RecordingManager(base_dir="/home/boresight/Saved_Videos")
 
