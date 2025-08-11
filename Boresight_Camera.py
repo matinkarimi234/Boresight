@@ -95,10 +95,10 @@ def main():
 
     # --- Initialize Overlay Display ---
     overlay_display = OverlayDisplay()
-    overlay_display.set_style(radius=10, tick_length=300, ring_thickness=1, tick_thickness=1, gap=2)
+    overlay_display.set_style(radius=50, tick_length=300, ring_thickness=1, tick_thickness=1, gap=2)
     overlay_display.refresh()
 
-    record_manager = RecordingManager(base_dir="~/Saved_Videos")
+    record_manager = RecordingManager(base_dir="/home/boresight/Saved_Videos")
 
     # --- Initialize Button Control ---
     button_control = ButtonControl(lambda flag: buttons_state_update_callback(flag))
