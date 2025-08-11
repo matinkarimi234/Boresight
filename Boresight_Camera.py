@@ -130,7 +130,7 @@ def main():
                     ok_button_press_duration = 0
                     buzzer_control.start_toggle(0.5, 1, 1)
                     state_machine.change_state(StateMachineEnum.HORIZONTAL_ADJUSTMENT)
-                    state_overlay.set_text("Horizontal ADJ.")
+                    state_overlay.set_text("H ADJ.")
                     led_control.start_toggle(0.5, 0.5)
 
                 # GOTO RECORDING STATE
@@ -183,7 +183,7 @@ def main():
                 if ok_button_press_duration > 0:
                     ok_button_press_duration = 0
                     buzzer_control.start_toggle(0.25, 1, 1)
-                    state_overlay.set_text("Vertical ADJ.")
+                    state_overlay.set_text("V ADJ.")
                     state_machine.change_state(StateMachineEnum.VERTICAL_ADJUSTMENT)
 
             elif current_state == StateMachineEnum.VERTICAL_ADJUSTMENT:
