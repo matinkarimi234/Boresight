@@ -77,18 +77,18 @@ def main():
     overlay_display.set_style(radius=20, tick_length=300, ring_thickness=1, tick_thickness=1, gap=-10)
     overlay_display.refresh()
 
-    side_bars = SideBarsOverlay(inner_size=(1280, 720), layer=2001, alpha=128)
+    side_bars = SideBarsOverlay(inner_size=(1280, 720), layer=2004, alpha=128)
     side_bars.show()
 
     
-    clock_overlay = TextOverlay(layer=2002,
+    clock_overlay = TextOverlay(layer=2001,
                         font_path="Fonts/digital-7.ttf",
                         font_size=36,
                         pos=('left', 'bottom'),
                         color=(130, 0, 0, 255),
                         offset=20)
     
-    state_overlay = TextOverlay(layer=2003,
+    state_overlay = TextOverlay(layer=2002,
                         font_path="Fonts/digital-7.ttf",
                         rec_color=(130,0,0,255),
                         font_size=36,
@@ -97,7 +97,7 @@ def main():
                         offset=20)
     
 
-    static_png = StaticPNGOverlay("Pictures/Farand_Logo.png", layer=2004,
+    static_png = StaticPNGOverlay("Pictures/Farand_Logo.png", layer=2003,
                               pos=('left','top'),  # or numbers like (50, 30)
                               scale=0.5,
                               offset=20)                # or (width, height)
