@@ -13,6 +13,9 @@ ok_button_press_duration = 0
 button_left_up_pressed = False
 button_right_down_pressed = False
 
+arrow_buttons_press_start_time = None
+arrow_buttons_press_duration = 0
+
 def buttons_state_update_callback(flag):
     global ok_button_press_duration, ok_button_press_start_time, button_left_up_pressed, button_right_down_pressed
     """Callback to receive flags from ButtonControl."""
@@ -33,14 +36,23 @@ def buttons_state_update_callback(flag):
     elif flag == ButtonControl.LEFT_UP_BUTTON_PRESSED:
         button_left_up_pressed = True
 
-    elif flag == ButtonControl.LEFT_UP_BUTTON_RELEASED:
-        button_left_up_pressed = False
-
     elif flag == ButtonControl.RIGHT_DOWN_BUTTON_PRESSED:
         button_right_down_pressed = True
+
+    elif flag == ButtonControl.LEFT_UP_BUTTON_RELEASED:
+        button_left_up_pressed = False
         
     elif flag == ButtonControl.RIGHT_DOWN_BUTTON_RELEASED:
         button_right_down_pressed = False
+
+    if button_left_up_pressed and button_right_down_pressed:
+        arrow_buttons_press_start_time = time.time()
+    else:
+        if arrow_buttons_press_start_time:
+            arrow_buttons_press_duration = time.time() - arrow_buttons_press_start_time
+
+            arrow_buttons_press_start_time = None
+
 
 def main():
     led_control = LEDControl(23)
@@ -100,6 +112,7 @@ def main():
                 state_overlay.set_text("LIVE")
 
             elif current_state == StateMachineEnum.NORMAL_STATE:
+                # GOTO Adjustment State
                 if ok_button_press_duration >= 3:  # long-press OK to enter H adjust
                     ok_button_press_duration = 0
                     buzzer_control.start_toggle(0.5, 1, 1)
@@ -107,8 +120,23 @@ def main():
                     state_overlay.set_text("Horizontal ADJ.")
                     led_control.start_toggle(0.5, 0.5)
 
+                # GOTO RECORDING STATE
+                if arrow_buttons_press_duration >= 3:
+                    arrow_buttons_press_duration = 0
+                    buzzer_control.start_toggle(0.5, 1, 1)
+                    state_machine.change_state(StateMachineEnum.RECORD_STATE)
+                    state_overlay.set_text("REC.")
+                    led_control.start_toggle(0.5, 0.5)
+
             elif current_state == StateMachineEnum.RECORD_STATE:
-                pass
+
+
+                
+                if ok_button_press_duration > 0:
+                    ok_button_press_duration = 0
+                    buzzer_control.start_toggle(0.25, 1, 1)
+                    led_control.stop()
+                    state_machine.change_state(StateMachineEnum.NORMAL_STATE)
 
             elif current_state == StateMachineEnum.HORIZONTAL_ADJUSTMENT:
                 # Move vertical line left/right
@@ -144,9 +172,6 @@ def main():
                     buzzer_control.start_toggle(0.5, 1, 1)
                     state_overlay.set_text("LIVE")
                     state_machine.change_state(StateMachineEnum.NORMAL_STATE)
-
-            elif current_state == StateMachineEnum.SAVING_VIDEO_STATE:
-                pass
 
             time.sleep(tick)
 

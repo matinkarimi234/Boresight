@@ -8,8 +8,6 @@ class StateMachineEnum(Enum):
     RECORD_STATE = 2
     HORIZONTAL_ADJUSTMENT = 3
     VERTICAL_ADJUSTMENT = 4
-    SAVING_VIDEO_STATE = 5
-
 
 class StateMachine:
     def __init__(self):
