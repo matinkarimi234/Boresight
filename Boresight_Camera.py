@@ -1,7 +1,7 @@
 import threading
 from Button_Control import ButtonControl
 from Camera_Setup import CameraSetup
-from Overlay_Display import OverlayDisplay, StaticPNGOverlay, TextOverlay
+from Overlay_Display import OverlayDisplay, StaticPNGOverlay, TextOverlay, SideBarsOverlay
 from State_Machine import StateMachine, StateMachineEnum
 from Alarm import BuzzerControl, LEDControl
 import time
@@ -71,6 +71,9 @@ def main():
     camera.start_preview()  # Start the camera preview
 
     # Create overlays
+
+    side_bars = SideBarsOverlay(inner_size=overlay_display.desired_res, layer=1996, alpha=128)
+    side_bars.show()
 
     clock_overlay = TextOverlay(layer=1997,
                         font_path="Fonts/digital-7.ttf",

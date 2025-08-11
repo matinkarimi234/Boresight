@@ -349,3 +349,39 @@ class TextOverlay:
 
     def close(self):
         self._stop_blink()
+
+
+class SideBarsOverlay:
+    def __init__(self, inner_size, layer=1996, alpha=128):
+        """
+        inner_size: (W, H) of your central image/preview area (e.g., 1280x720).
+        alpha: 0..255, use 128 for ~50%.
+        """
+        self.inner_w, self.inner_h = inner_size
+        self.disp = DispmanX(pixel_format="RGBA", buffer_type="numpy", layer=layer)
+        self.disp_w, self.disp_h = self.disp.size
+        self.color = (0, 0, 0, int(max(0, min(255, alpha))))
+
+    def _compute_side_widths(self):
+        left_w = max((self.disp_w - self.inner_w) // 2, 0)
+        right_w = max(self.disp_w - (left_w + self.inner_w), 0)
+        return left_w, right_w
+
+    def show(self):
+        self.disp.buffer[:] = 0  # fully transparent
+        left_w, right_w = self._compute_side_widths()
+
+        if left_w > 0:
+            self.disp.buffer[:, :left_w, :] = self.color
+        if right_w > 0:
+            self.disp.buffer[:, self.disp_w - right_w : self.disp_w, :] = self.color
+
+        self.disp.update()
+
+    def hide(self):
+        self.disp.buffer[:] = 0
+        self.disp.update()
+
+    def set_inner_size(self, inner_size):
+        self.inner_w, self.inner_h = inner_size
+        self.show()
