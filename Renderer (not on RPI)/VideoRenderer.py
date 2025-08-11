@@ -324,7 +324,7 @@ def main():
     ap.add_argument("--clock-pos", default="bottom-left",
                     choices=["top-left","top-right","bottom-left","bottom-right"],
                     help="Where to draw the clock (default bottom-left).")
-    ap.add_argument("--clock-scale", type=float, default=0.8, help="Clock font scale (default 0.8).")
+    ap.add_argument("--clock-scale", type=float, default=1.0, help="Clock font scale (default 0.8).")
     ap.add_argument("--tz", default="Asia/Tehran",
                     help="IANA timezone for the clock (default Asia/Tehran; use 'local' for system local).")
     args = ap.parse_args()

@@ -2,6 +2,7 @@ import numpy as np
 import json, os
 from dispmanx import DispmanX
 from PIL import Image, ImageDraw, ImageFont
+import threading
 
 class OverlayDisplay:
     OFFSET_FILE = "~/Saved_Videos/overlay_offset.json"
@@ -207,43 +208,59 @@ class StaticPNGOverlay:
         self.disp.update()
 
 class TextOverlay:
-    def __init__(self, layer, font_path, font_size, pos=('left', 'top'), color=(255,255,255,255), offset=20):
+    def __init__(self, layer, font_path, font_size,
+                 pos=('left', 'top'),
+                 color=(255,255,255,255),
+                 offset=20,
+                 rec_indicator=True,
+                 rec_color=(255, 0, 0, 255),
+                 rec_blink=True,
+                 rec_blink_interval=0.5):  # seconds
         self.disp = DispmanX(pixel_format="RGBA", buffer_type="numpy", layer=layer)
         self.disp_w, self.disp_h = self.disp.size
         self.font = ImageFont.truetype(font_path, font_size)
         self.color = color
         self.pos = pos
         self.offset = offset
-        self.last_text = None
 
-    def set_text(self, text):
-        if text == self.last_text:
-            return
-        self.last_text = text
+        self.rec_indicator = rec_indicator
+        self.rec_color = rec_color
+        self.rec_blink = rec_blink
+        self.rec_blink_interval = rec_blink_interval
 
-        # Clear buffer
-        self.disp.buffer[:] = 0
+        self._current_text = ""
+        self._blink_phase = True
+        self._blink_thread = None
+        self._blink_stop = threading.Event()
+        self._lock = threading.Lock()
+
+    def _measure(self, draw, txt, font):
+        if hasattr(draw, "textbbox"):
+            l, t, r, b = draw.textbbox((0, 0), txt, font=font)
+            return (r - l), (b - t)
+        if hasattr(font, "getbbox"):
+            l, t, r, b = font.getbbox(txt)
+            return (r - l), (b - t)
+        return font.getsize(txt)
+
+    def _render(self, text, dot_on):
         img = Image.new('RGBA', (self.disp_w, self.disp_h), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
+        w, h = self._measure(draw, text, self.font)
 
-        # Measure text (Pillow 10+: textbbox; fallback for older versions)
-        def measure(draw, txt, font):
-            if hasattr(draw, "textbbox"):
-                l, t, r, b = draw.textbbox((0, 0), txt, font=font)
-                return (r - l), (b - t)
-            # very old fallback
-            if hasattr(font, "getbbox"):
-                l, t, r, b = font.getbbox(txt)
-                return (r - l), (b - t)
-            return font.getsize(txt)  # last resort
+        show_rec = self.rec_indicator and text.strip().upper().startswith("REC")
+        # dot size & spacing
+        dot_radius = max(3, int(h * 0.35)) if show_rec else 0
+        dot_diam = dot_radius * 2
+        gap = max(4, dot_radius // 2) if show_rec else 0
 
-        w, h = measure(draw, text, self.font)
+        total_w = w + (dot_diam + gap if show_rec else 0)
 
-        # Apply offset to each position mode
+        # group-aligned positions
         x_positions = {
             'left': self.offset,
-            'center': (self.disp_w - w) // 2,
-            'right': self.disp_w - w - self.offset
+            'center': (self.disp_w - total_w) // 2,
+            'right': self.disp_w - total_w - self.offset
         }
         y_positions = {
             'top': self.offset,
@@ -251,11 +268,62 @@ class TextOverlay:
             'bottom': self.disp_h - h - self.offset
         }
 
-        # Compute position
-        x = x_positions.get(self.pos[0], self.pos[0] + self.offset if isinstance(self.pos[0], int) else self.offset)
-        y = y_positions.get(self.pos[1], self.pos[1] + self.offset if isinstance(self.pos[1], int) else self.offset)
+        gx = self.pos[0] + self.offset if isinstance(self.pos[0], int) else x_positions.get(self.pos[0], self.offset)
+        gy = self.pos[1] + self.offset if isinstance(self.pos[1], int) else y_positions.get(self.pos[1], self.offset)
 
-        draw.text((x, y), text, font=self.font, fill=self.color)
+        text_x = gx + (dot_diam + gap if show_rec else 0)
+        text_y = gy
+
+        if show_rec and dot_on:
+            cy = gy + h // 2
+            cx = gx + dot_radius
+            bbox = [cx - dot_radius, cy - dot_radius, cx + dot_radius, cy + dot_radius]
+            draw.ellipse(bbox, fill=self.rec_color)
+
+        draw.text((text_x, text_y), text, font=self.font, fill=self.color)
+
         self.disp.buffer[:] = np.array(img, dtype=np.uint8)
         self.disp.update()
 
+    def _start_blink(self):
+        if self._blink_thread and self._blink_thread.is_alive():
+            return
+        self._blink_stop.clear()
+        self._blink_thread = threading.Thread(target=self._blink_loop, daemon=True)
+        self._blink_thread.start()
+
+    def _stop_blink(self):
+        if self._blink_thread and self._blink_thread.is_alive():
+            self._blink_stop.set()
+            # no join() to keep it non-blocking; thread is daemon
+
+    def _blink_loop(self):
+        # Toggle the dot while the text stays "REC..."
+        while not self._blink_stop.is_set():
+            with self._lock:
+                text = self._current_text
+                is_rec = text.strip().upper().startswith("REC") and self.rec_indicator
+                if not is_rec:
+                    break
+                self._blink_phase = not self._blink_phase
+                self._render(text, dot_on=self._blink_phase)
+            # sleep last to render immediately after state change
+            self._blink_stop.wait(self.rec_blink_interval)
+
+    def set_text(self, text):
+        with self._lock:
+            self._current_text = text
+            is_rec = text.strip().upper().startswith("REC") and self.rec_indicator
+
+            if is_rec and self.rec_blink:
+                # ensure a frame is drawn immediately, then start blinking
+                self._blink_phase = True
+                self._render(text, dot_on=True)
+                self._start_blink()
+            else:
+                # draw static (no dot or solid dot if blinking disabled)
+                self._stop_blink()
+                self._render(text, dot_on=is_rec and not self.rec_blink)
+
+    def close(self):
+        self._stop_blink()

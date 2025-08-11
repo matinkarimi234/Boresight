@@ -81,6 +81,7 @@ def main():
     
     state_overlay = TextOverlay(layer=1998,
                         font_path="Fonts/digital-7.ttf",
+                        rec_color=(130,0,0,255),
                         font_size=36,
                         pos=('right', 'top'),
                         color=(130, 0, 0, 255),
@@ -95,7 +96,7 @@ def main():
 
     # --- Initialize Overlay Display ---
     overlay_display = OverlayDisplay()
-    overlay_display.set_style(radius=50, tick_length=300, ring_thickness=1, tick_thickness=1, gap=2)
+    overlay_display.set_style(radius=20, tick_length=300, ring_thickness=1, tick_thickness=1, gap=-10)
     overlay_display.refresh()
 
     record_manager = RecordingManager(base_dir="/home/boresight/Saved_Videos")
