@@ -98,7 +98,7 @@ def main():
 
     static_png = StaticPNGOverlay("Pictures/Farand_Logo.png", layer=2004,
                               pos=('left','top'),  # or numbers like (50, 30)
-                              scale=0.5,
+                              scale=0.3,
                               offset=20)                # or (width, height)
     static_png.show()  # draws once and done
 
