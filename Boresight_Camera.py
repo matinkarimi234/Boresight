@@ -5,6 +5,7 @@ from Overlay_Display import OverlayDisplay, StaticPNGOverlay, TextOverlay
 from State_Machine import StateMachine, StateMachineEnum
 from Alarm import BuzzerControl, LEDControl
 import time
+from Record_Manager import MetadataRecorder,RecordingManager
 
 # Add global variable to track button press duration
 ok_button_press_start_time = None
@@ -55,6 +56,10 @@ def buttons_state_update_callback(flag):
             arrow_buttons_press_start_time = None
 
 
+
+
+
+
 def main():
     led_control = LEDControl(23)
     buzzer_control = BuzzerControl(21)
@@ -93,13 +98,15 @@ def main():
     overlay_display.set_style(radius=10, tick_length=300, ring_thickness=1, tick_thickness=1, gap=2)
     overlay_display.refresh()
 
+    record_manager = RecordingManager(base_dir="~/Saved_Videos")
+
     # --- Initialize Button Control ---
     button_control = ButtonControl(lambda flag: buttons_state_update_callback(flag))
 
 
     def state_machine_thread():
         global ok_button_press_duration, button_left_up_pressed, button_right_down_pressed, arrow_buttons_press_duration
-
+        nonlocal_rec_started = False  # optional guard
         STEP = 1  # pixels per tick; tweak as you like
 
         while state_machine.running:
@@ -130,7 +137,15 @@ def main():
                     led_control.start_toggle(0.5, 0.5)
 
             elif current_state == StateMachineEnum.RECORD_STATE:
-
+                # START recording + metadata on first entry
+                if not record_manager.active:
+                    record_manager.start(
+                        camera=camera,
+                        overlay_display=overlay_display,
+                        state_text_fn=lambda: (state_overlay.last_text or "")
+                    )
+                    print("Recording to:", record_manager.video_path)
+                    print("Metadata to  :", record_manager.meta_path)
 
 
                 if ok_button_press_duration > 0:
@@ -138,6 +153,14 @@ def main():
                     buzzer_control.start_toggle(0.25, 1, 1)
                     led_control.stop()
                     state_overlay.set_text("LIVE")
+
+                    
+                    # STOP recording + metadata
+                    record_manager.stop(camera)
+                    print("Saved:", record_manager.video_path)
+                    print("Sidecar:", record_manager.meta_path)
+
+
                     state_machine.change_state(StateMachineEnum.NORMAL_STATE)
 
             elif current_state == StateMachineEnum.HORIZONTAL_ADJUSTMENT:
@@ -205,7 +228,12 @@ def main():
         print("Exiting...")
     finally:
         overlay_display.save_offset()
+        
         camera.stop_preview()
+
+        if record_manager.active:
+            record_manager.stop(camera)
+
         state_machine.stop()
 
 if __name__ == '__main__':
