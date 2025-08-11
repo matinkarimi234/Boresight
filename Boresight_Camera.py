@@ -152,16 +152,17 @@ def main():
                     ok_button_press_duration = 0
                     buzzer_control.start_toggle(0.25, 1, 1)
                     led_control.stop()
-                    state_overlay.set_text("LIVE")
 
                     
+
+                    state_overlay.set_text("SAVING...")
                     # STOP recording + metadata
                     record_manager.stop(camera.camera)
                     print("Saved:", record_manager.video_path)
                     print("Sidecar:", record_manager.meta_path)
 
-
-                    state_machine.change_state(StateMachineEnum.NORMAL_STATE)
+                    state_machine.change_state(StateMachineEnum.SAVING_VIDEO_STATE)
+                    
 
             elif current_state == StateMachineEnum.HORIZONTAL_ADJUSTMENT:
                 # Move vertical line left/right
@@ -197,6 +198,11 @@ def main():
                     buzzer_control.start_toggle(0.5, 1, 1)
                     state_overlay.set_text("LIVE")
                     state_machine.change_state(StateMachineEnum.NORMAL_STATE)
+
+            elif current_state == StateMachineEnum.SAVING_VIDEO_STATE:
+                if record_manager.active == False:
+                    state_machine.change_state(StateMachineEnum.NORMAL_STATE)
+                    state_overlay.set_text("LIVE")
 
             time.sleep(tick)
 
