@@ -140,7 +140,7 @@ def main():
                 # START recording + metadata on first entry
                 if not record_manager.active:
                     record_manager.start(
-                        camera=camera,
+                        camera=camera.camera,
                         overlay_display=overlay_display,
                         state_text_fn=lambda: (state_overlay.last_text or "")
                     )
@@ -156,7 +156,7 @@ def main():
 
                     
                     # STOP recording + metadata
-                    record_manager.stop(camera)
+                    record_manager.stop(camera.camera)
                     print("Saved:", record_manager.video_path)
                     print("Sidecar:", record_manager.meta_path)
 
@@ -232,7 +232,7 @@ def main():
         camera.stop_preview()
 
         if record_manager.active:
-            record_manager.stop(camera)
+            record_manager.stop(camera.camera)
 
         state_machine.stop()
 
