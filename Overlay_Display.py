@@ -44,23 +44,18 @@ class OverlayDisplay:
         self.horizontal_y = int(np.clip(self.horizontal_y, r, H - 1 - r))
 
     def _draw_reticle(self, img_array, cx, cy):
-        """
-        Draws:
-          - a ring (circle outline) centered at (cx, cy)
-          - four ticks outside the circle (up/down/left/right)
-        """
         H, W, _ = img_array.shape
         pil_img = Image.fromarray(img_array, mode='RGBA')
         d = ImageDraw.Draw(pil_img)
 
+        cx = int(cx); cy = int(cy)   # ensure integers
         r = int(self.radius)
+
         # Circle (ring)
         bbox = [cx - r, cy - r, cx + r, cy + r]
         try:
-            # Pillow >= 8 supports width=
             d.ellipse(bbox, outline=self.color, width=int(self.ring_thickness))
         except TypeError:
-            # Fallback: draw multiple concentric ellipses
             for t in range(self.ring_thickness):
                 bb = [bbox[0]-t//2, bbox[1]-t//2, bbox[2]+t//2, bbox[3]+t//2]
                 d.ellipse(bb, outline=self.color)
@@ -69,17 +64,20 @@ class OverlayDisplay:
         g = int(self.gap)
         L = int(self.tick_length)
         w = int(self.tick_thickness)
-
-        # Right tick: from circle edge outward
         d.line([(cx + r + g, cy), (cx + r + g + L, cy)], fill=self.color, width=w)
-        # Left tick
         d.line([(cx - r - g, cy), (cx - r - g - L, cy)], fill=self.color, width=w)
-        # Top tick
         d.line([(cx, cy - r - g), (cx, cy - r - g - L)], fill=self.color, width=w)
-        # Bottom tick
         d.line([(cx, cy + r + g), (cx, cy + r + g + L)], fill=self.color, width=w)
 
+        # --- 1px center dot ---
+        if 0 <= cx < W and 0 <= cy < H:
+            # precise single pixel in RGBA
+            pil_img.putpixel((cx, cy), (130, 0, 0, 255))
+            # (equivalent alternative)
+            # d.point((cx, cy), fill=(130, 0, 0, 255))
+
         return np.array(pil_img, dtype=np.uint8)
+
 
     def update_overlay_image(self, horizontal_y=None, vertical_x=None):
         if horizontal_y is not None:
@@ -285,12 +283,25 @@ class TextOverlay:
         text_x = gx + (dot_diam + gap if show_rec else 0)
         text_y = gy
 
+        # --- draw REC dot vertically centered to the real text box ---
         if show_rec and dot_on:
-            cy = gy + h // 2
+            try:
+                # Get the exact ink box at the position we’ll draw the text
+                l, t, r, b = draw.textbbox((text_x, text_y), text, font=self.font)
+                cy = (t + b) // 2
+            except AttributeError:
+                # Fallbacks for older Pillow
+                try:
+                    ascent, descent = self.font.getmetrics()
+                    cy = text_y + (ascent - descent) // 2
+                except Exception:
+                    cy = text_y + h // 2  # last resort
+
             cx = gx + dot_radius
             bbox = [cx - dot_radius, cy - dot_radius, cx + dot_radius, cy + dot_radius]
             draw.ellipse(bbox, fill=self.rec_color)
 
+        # Draw the text AFTER the dot so the dot never overlaps letters
         draw.text((text_x, text_y), text, font=self.font, fill=self.color)
 
         self.disp.buffer[:] = np.array(img, dtype=np.uint8)
