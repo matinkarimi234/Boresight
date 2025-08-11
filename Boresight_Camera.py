@@ -17,7 +17,8 @@ arrow_buttons_press_start_time = None
 arrow_buttons_press_duration = 0
 
 def buttons_state_update_callback(flag):
-    global ok_button_press_duration, ok_button_press_start_time, button_left_up_pressed, button_right_down_pressed
+    global ok_button_press_duration, ok_button_press_start_time, button_left_up_pressed
+    global button_right_down_pressed, arrow_buttons_press_start_time, arrow_buttons_press_duration
     """Callback to receive flags from ButtonControl."""
     
     if flag == ButtonControl.OK_PRESSED:
