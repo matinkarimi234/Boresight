@@ -77,9 +77,6 @@ def main():
     overlay_display.set_style(radius=20, tick_length=300, ring_thickness=1, tick_thickness=1, gap=-10)
     overlay_display.refresh()
 
-    side_bars = SideBarsOverlay(inner_size=(1280, 720), layer=2004, alpha=128)
-    side_bars.show()
-
     
     clock_overlay = TextOverlay(layer=2001,
                         font_path="Fonts/digital-7.ttf",
@@ -102,6 +99,10 @@ def main():
                               scale=0.5,
                               offset=20)                # or (width, height)
     static_png.show()  # draws once and done
+
+    side_bars = SideBarsOverlay(inner_size=(1280, 720), layer=2004, alpha=255)
+    side_bars.show()
+
 
     record_manager = RecordingManager(base_dir="/home/boresight/Saved_Videos")
 
