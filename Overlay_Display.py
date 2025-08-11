@@ -6,6 +6,147 @@ from PIL import Image, ImageDraw, ImageFont
 class OverlayDisplay:
     OFFSET_FILE = "~/Saved_Videos/overlay_offset.json"
 
+    def __init__(self, desired_res=(1280, 720),
+                 radius=120,                # circle radius (px)
+                 ring_thickness=3,          # circle outline thickness (px)
+                 tick_length=80,            # length of outside ticks (px)
+                 tick_thickness=3,          # tick line thickness (px)
+                 gap=6,                     # gap between circle and tick start (px)
+                 color=(130, 0, 0, 255)):   # RGBA
+        self.desired_res = desired_res  # (W, H)
+        self.disp = DispmanX(pixel_format="RGBA", buffer_type="numpy", layer=2000)
+        self.disp_width, self.disp_height = self.disp.size
+
+        # draw params
+        self.radius = radius
+        self.ring_thickness = ring_thickness
+        self.tick_length = tick_length
+        self.tick_thickness = tick_thickness
+        self.gap = gap
+        self.color = color
+
+        # Our overlay bitmap is ALWAYS desired_res (no scaling here)
+        self.overlay_image = np.zeros((self.desired_res[1], self.desired_res[0], 4), dtype=np.uint8)
+
+        # Center this bitmap once on the display
+        self.offset_x = (self.disp_width  - self.desired_res[0]) // 2
+        self.offset_y = (self.disp_height - self.desired_res[1]) // 2
+
+        self.horizontal_y, self.vertical_x = self.load_offset()
+        # make sure center keeps circle on-screen
+        self._clamp_center_to_keep_circle_visible()
+
+    def _clamp_center_to_keep_circle_visible(self):
+        W, H = self.desired_res
+        r = self.radius
+        self.vertical_x   = int(np.clip(self.vertical_x,   r, W - 1 - r))
+        self.horizontal_y = int(np.clip(self.horizontal_y, r, H - 1 - r))
+
+    def _draw_reticle(self, img_array, cx, cy):
+        """
+        Draws:
+          - a ring (circle outline) centered at (cx, cy)
+          - four ticks outside the circle (up/down/left/right)
+        """
+        H, W, _ = img_array.shape
+        pil_img = Image.fromarray(img_array, mode='RGBA')
+        d = ImageDraw.Draw(pil_img)
+
+        r = int(self.radius)
+        # Circle (ring)
+        bbox = [cx - r, cy - r, cx + r, cy + r]
+        try:
+            # Pillow >= 8 supports width=
+            d.ellipse(bbox, outline=self.color, width=int(self.ring_thickness))
+        except TypeError:
+            # Fallback: draw multiple concentric ellipses
+            for t in range(self.ring_thickness):
+                bb = [bbox[0]-t//2, bbox[1]-t//2, bbox[2]+t//2, bbox[3]+t//2]
+                d.ellipse(bb, outline=self.color)
+
+        # Ticks (outside only)
+        g = int(self.gap)
+        L = int(self.tick_length)
+        w = int(self.tick_thickness)
+
+        # Right tick: from circle edge outward
+        d.line([(cx + r + g, cy), (cx + r + g + L, cy)], fill=self.color, width=w)
+        # Left tick
+        d.line([(cx - r - g, cy), (cx - r - g - L, cy)], fill=self.color, width=w)
+        # Top tick
+        d.line([(cx, cy - r - g), (cx, cy - r - g - L)], fill=self.color, width=w)
+        # Bottom tick
+        d.line([(cx, cy + r + g), (cx, cy + r + g + L)], fill=self.color, width=w)
+
+        return np.array(pil_img, dtype=np.uint8)
+
+    def update_overlay_image(self, horizontal_y=None, vertical_x=None):
+        if horizontal_y is not None:
+            self.horizontal_y = int(horizontal_y)
+        if vertical_x is not None:
+            self.vertical_x = int(vertical_x)
+        self._clamp_center_to_keep_circle_visible()
+
+        # clear & draw
+        self.overlay_image[:] = 0
+        self.overlay_image[:] = self._draw_reticle(
+            self.overlay_image, cx=self.vertical_x, cy=self.horizontal_y
+        )
+
+    def refresh(self):
+        """Redraw reticle and push the centered bitmap to the display."""
+        self.update_overlay_image(self.horizontal_y, self.vertical_x)
+        y0, y1 = self.offset_y, self.offset_y + self.desired_res[1]
+        x0, x1 = self.offset_x, self.offset_x + self.desired_res[0]
+        self.disp.buffer[y0:y1, x0:x1, :] = self.overlay_image
+        self.disp.update()
+
+    # helpers to move the reticle center
+    def nudge_vertical(self, dx):   # move center left/right
+        W = self.desired_res[0]
+        self.vertical_x = int(np.clip(self.vertical_x + dx, self.radius, W - 1 - self.radius))
+        self.refresh()
+
+    def nudge_horizontal(self, dy): # move center up/down
+        H = self.desired_res[1]
+        self.horizontal_y = int(np.clip(self.horizontal_y + dy, self.radius, H - 1 - self.radius))
+        self.refresh()
+
+    def load_offset(self):
+        path = os.path.expanduser(self.OFFSET_FILE)
+        if os.path.exists(path):
+            try:
+                with open(path, "r") as f:
+                    d = json.load(f)
+                print("Loaded saved offset:", d.get("horizontal_y"), d.get("vertical_x"))
+                return d.get("horizontal_y", self.desired_res[1] // 2), d.get("vertical_x", self.desired_res[0] // 2)
+            except Exception as e:
+                print("Error reading offset file, using defaults:", e)
+        return self.desired_res[1] // 2, self.desired_res[0] // 2
+
+    def save_offset(self):
+        try:
+            path = os.path.expanduser(self.OFFSET_FILE)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
+                json.dump({"horizontal_y": self.horizontal_y, "vertical_x": self.vertical_x}, f)
+            print("Saved offset:", self.horizontal_y, self.vertical_x)
+        except Exception as e:
+            print("Error saving offset:", e)
+
+    # optional: quick setters for live tuning
+    def set_style(self, *, radius=None, ring_thickness=None,
+                  tick_length=None, tick_thickness=None, gap=None, color=None):
+        if radius is not None: self.radius = int(radius)
+        if ring_thickness is not None: self.ring_thickness = int(ring_thickness)
+        if tick_length is not None: self.tick_length = int(tick_length)
+        if tick_thickness is not None: self.tick_thickness = int(tick_thickness)
+        if gap is not None: self.gap = int(gap)
+        if color is not None: self.color = tuple(color)
+        self._clamp_center_to_keep_circle_visible()
+        self.refresh()
+    OFFSET_FILE = "~/Saved_Videos/overlay_offset.json"
+
     def __init__(self, desired_res=(1280, 720)):
         self.desired_res = desired_res  # (W, H)
         self.disp = DispmanX(pixel_format="RGBA", buffer_type="numpy", layer=2000)

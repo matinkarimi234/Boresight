@@ -77,7 +77,7 @@ def main():
 
     # --- Initialize Overlay Display ---
     overlay_display = OverlayDisplay()
-
+    overlay_display.set_style(radius=50, tick_length=150, ring_thickness=2, tick_thickness=1, gap=8)
     overlay_display.refresh()
 
     # --- Initialize Button Control ---
