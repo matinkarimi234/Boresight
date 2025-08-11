@@ -1,7 +1,7 @@
 import threading
 from Button_Control import ButtonControl
 from Camera_Setup import CameraSetup
-from Overlay_Display import OverlayDisplay, StaticPNGOverlay, TextOverlay, SideBarsOverlay
+from Overlay_Display import OverlayDisplay, StaticPNGOverlay, TextOverlay, ContainerOverlay
 from State_Machine import StateMachine, StateMachineEnum
 from Alarm import BuzzerControl, LEDControl
 import time
@@ -100,7 +100,7 @@ def main():
                               offset=20)                # or (width, height)
     static_png.show()  # draws once and done
 
-    side_bars = SideBarsOverlay(inner_size=(1280, 720), layer=2004, alpha=255)
+    side_bars = ContainerOverlay(bar_width=60, layer=2004, alpha=128)
     side_bars.show()
 
 

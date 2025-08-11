@@ -351,31 +351,55 @@ class TextOverlay:
         self._stop_blink()
 
 
-class SideBarsOverlay:
-    def __init__(self, inner_size, layer=1996, alpha=128):
+import numpy as np
+from dispmanx import DispmanX
+
+class ContainerOverlay:
+    def __init__(self, inner_size=None, bar_width=None, layer=1996, alpha=128,
+                 center=True, inner_pos=None):
         """
-        inner_size: (W, H) of your central image/preview area (e.g., 1280x720).
-        alpha: 0..255, use 128 for ~50%.
+        inner_size: (W,H) area to keep transparent (preview area). If None, use bar_width.
+        bar_width: fixed side-bar width (px). If provided, overrides inner_size for L/R bars.
+        alpha: 0..255 (128 ≈ 50%)
+        layer: z-order; must be ABOVE preview, BELOW text/reticle
         """
-        self.inner_w, self.inner_h = inner_size
         self.disp = DispmanX(pixel_format="RGBA", buffer_type="numpy", layer=layer)
         self.disp_w, self.disp_h = self.disp.size
-        self.color = (0, 0, 0, int(max(0, min(255, alpha))))
+        self.alpha = int(max(0, min(255, alpha)))
+        self.inner_size = inner_size
+        self.bar_width = bar_width
+        self.center = center
+        self.inner_pos = inner_pos  # (x,y) if not centered
 
-    def _compute_side_widths(self):
-        left_w = max((self.disp_w - self.inner_w) // 2, 0)
-        right_w = max(self.disp_w - (left_w + self.inner_w), 0)
-        return left_w, right_w
+    def _calc_inner_rect(self):
+        if self.bar_width is not None:
+            x0 = int(self.bar_width)
+            x1 = int(self.disp_w - self.bar_width)
+            y0, y1 = 0, self.disp_h
+        else:
+            W, H = self.inner_size
+            if self.center:
+                x0 = (self.disp_w - W) // 2
+                y0 = (self.disp_h - H) // 2
+            else:
+                x0, y0 = self.inner_pos or (0, 0)
+            x1, y1 = x0 + W, y0 + H
+
+        # clamp to screen
+        x0 = max(0, min(self.disp_w, x0)); x1 = max(0, min(self.disp_w, x1))
+        y0 = max(0, min(self.disp_h, y0)); y1 = max(0, min(self.disp_h, y1))
+        return x0, y0, x1, y1
 
     def show(self):
-        self.disp.buffer[:] = 0  # fully transparent
-        left_w, right_w = self._compute_side_widths()
+        # Full-screen 50% black
+        buf = self.disp.buffer
+        buf[:] = 0
+        buf[..., 3] = self.alpha  # black with alpha (premult OK since RGB=0)
 
-        if left_w > 0:
-            self.disp.buffer[:, :left_w, :] = self.color
-        if right_w > 0:
-            self.disp.buffer[:, self.disp_w - right_w : self.disp_w, :] = self.color
-
+        # Carve the inner transparent window
+        x0, y0, x1, y1 = self._calc_inner_rect()
+        if x1 > x0 and y1 > y0:
+            buf[y0:y1, x0:x1, 3] = 0  # alpha=0 -> fully transparent
         self.disp.update()
 
     def hide(self):
@@ -383,5 +407,10 @@ class SideBarsOverlay:
         self.disp.update()
 
     def set_inner_size(self, inner_size):
-        self.inner_w, self.inner_h = inner_size
+        self.inner_size = inner_size
         self.show()
+
+    def set_bar_width(self, w):
+        self.bar_width = int(max(0, w))
+        self.show()
+
