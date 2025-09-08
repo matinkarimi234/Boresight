@@ -73,7 +73,7 @@ def main():
     global startup_window_open, startup_abort_requested
     startup_window_open = True
 
-    # Initialize Button Control first so we can read OK immediately
+    # --- Initialize Button Control ---
     button_control = ButtonControl(lambda flag: buttons_state_update_callback(flag))
 
     # Give GPIO callbacks a short moment; also allow a quick press during boot
@@ -129,8 +129,7 @@ def main():
 
     record_manager = RecordingManager(base_dir="/home/boresight/Saved_Videos")
 
-    # --- Initialize Button Control ---
-    button_control = ButtonControl(lambda flag: buttons_state_update_callback(flag))
+
 
 
     def state_machine_thread():
