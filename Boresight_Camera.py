@@ -153,7 +153,7 @@ def main():
 
             elif current_state == StateMachineEnum.NORMAL_STATE:
                 # GOTO Adjustment State
-                if ok_button_press_duration >= 3:  # long-press OK to enter H adjust
+                if ok_button_press_duration >= 3 and exit_buttons_press_duration == 0:  # long-press OK to enter H adjust
                     ok_button_press_duration = 0
                     buzzer_control.start_toggle(0.5, 1, 1)
                     state_machine.change_state(StateMachineEnum.HORIZONTAL_ADJUSTMENT)
