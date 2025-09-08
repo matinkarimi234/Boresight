@@ -15,27 +15,28 @@ ok_button_press_duration = 0
 button_left_up_pressed = False
 button_right_down_pressed = False
 
+button_ok_pressed = False
+
 arrow_buttons_press_start_time = None
 arrow_buttons_press_duration = 0
 
-startup_window_open = True
-startup_abort_requested = False
+exit_buttons_start_time = None
+exit_buttons_press_duration = 0
 
 def buttons_state_update_callback(flag):
     global ok_button_press_duration, ok_button_press_start_time, button_left_up_pressed
     global button_right_down_pressed, arrow_buttons_press_start_time, arrow_buttons_press_duration
-    global startup_window_open, startup_abort_requested   # <-- add this
+    global button_ok_pressed, exit_buttons_press_duration, exit_buttons_start_time
     """Callback to receive flags from ButtonControl."""
     
     if flag == ButtonControl.OK_PRESSED:
-        # If we're still in the startup window, request abort
-        if startup_window_open:                         # <-- add this block
-            startup_abort_requested = True
+        button_ok_pressed = True;
         # Start a timer when the button is pressed
         ok_button_press_start_time = time.time()
         print("OK button pressed")
 
     elif flag == ButtonControl.OK_RELEASED:
+        button_ok_pressed = False
         print("OK button released")
         if ok_button_press_start_time:
             ok_button_press_duration = time.time() - ok_button_press_start_time
@@ -55,13 +56,26 @@ def buttons_state_update_callback(flag):
     elif flag == ButtonControl.RIGHT_DOWN_BUTTON_RELEASED:
         button_right_down_pressed = False
 
+
     if button_left_up_pressed and button_right_down_pressed:
         arrow_buttons_press_start_time = time.time()
+
     else:
         if arrow_buttons_press_start_time:
             arrow_buttons_press_duration = time.time() - arrow_buttons_press_start_time
 
             arrow_buttons_press_start_time = None
+
+
+    if button_left_up_pressed and button_ok_pressed:
+        exit_buttons_start_time = time.time()
+
+    else:
+        if exit_buttons_start_time:
+            exit_buttons_press_duration = time.time() - exit_buttons_start_time
+
+            exit_buttons_start_time = None
+
 
 
 
@@ -72,22 +86,9 @@ def main():
     led_control = LEDControl(23)
     buzzer_control = BuzzerControl(21)
 
-    # --- EARLY ABORT WINDOW (check OK before camera, overlays, etc.) ---
-    global startup_window_open, startup_abort_requested
-    startup_window_open = True
-
     # --- Initialize Button Control ---
     button_control = ButtonControl(lambda flag: buttons_state_update_callback(flag))
 
-    # Give GPIO callbacks a short moment; also allow a quick press during boot
-    abort_deadline = time.time() + 2.0   # window length (seconds); tweak as you like
-    while time.time() < abort_deadline:
-        if startup_abort_requested:
-            print("Startup aborted by OK button; exiting cleanly before camera init.")
-            sys.exit(0)  # clean exit so systemd with Restart=on-failure won't relaunch
-        time.sleep(0.02)
-
-    startup_window_open = False
     # -------------------------------------------------------------------
 
     # Initialize state machine
@@ -136,7 +137,7 @@ def main():
 
 
     def state_machine_thread():
-        global ok_button_press_duration, button_left_up_pressed, button_right_down_pressed, arrow_buttons_press_duration
+        global ok_button_press_duration, button_left_up_pressed, button_right_down_pressed, arrow_buttons_press_duration, exit_buttons_press_duration
         nonlocal_rec_started = False  # optional guard
         STEP = 1  # pixels per tick; tweak as you like
 
@@ -166,6 +167,12 @@ def main():
                     state_machine.change_state(StateMachineEnum.RECORD_STATE)
                     state_overlay.set_text("REC.")
                     led_control.start_toggle(0.5, 0.5)
+
+                # Exiting
+                if exit_buttons_press_duration >= 3:
+                    exit_buttons_press_duration = 0
+                    buzzer_control.start_toggle(1, 1, 2)
+                    sys.exit(0)  # clean exit so systemd with Restart=on-failure won't relaunch
 
             elif current_state == StateMachineEnum.RECORD_STATE:
                 # START recording + metadata on first entry
