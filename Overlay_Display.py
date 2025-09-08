@@ -3,6 +3,7 @@ import json, os
 from dispmanx import DispmanX
 from PIL import Image, ImageDraw, ImageFont
 import threading
+import cv2 as cv
 
 class OverlayDisplay:
     OFFSET_FILE = "~/Saved_Videos/overlay_offset.json"
@@ -44,39 +45,45 @@ class OverlayDisplay:
         self.horizontal_y = int(np.clip(self.horizontal_y, r, H - 1 - r))
 
     def _draw_reticle(self, img_array, cx, cy):
-        H, W, _ = img_array.shape
-        pil_img = Image.fromarray(img_array, mode='RGBA')
-        d = ImageDraw.Draw(pil_img)
+        """
+        Anti-aliased reticle drawing using OpenCV on an RGBA (BGRA for cv) numpy buffer.
+        """
+        H, W, C = img_array.shape
+        assert C == 4, "overlay buffer must be RGBA (4 channels)"
 
-        cx = int(cx); cy = int(cy)   # ensure integers
-        r = int(self.radius)
+        # OpenCV expects BGRA order
+        r, g, b, a = self.color
+        color_bgra = (b, g, r, a)
 
-        # Circle (ring)
-        bbox = [cx - r, cy - r, cx + r, cy + r]
-        try:
-            d.ellipse(bbox, outline=self.color, width=int(self.ring_thickness))
-        except TypeError:
-            for t in range(self.ring_thickness):
-                bb = [bbox[0]-t//2, bbox[1]-t//2, bbox[2]+t//2, bbox[3]+t//2]
-                d.ellipse(bb, outline=self.color)
-
-        # Ticks (outside only)
+        # Ensure ints
+        cx = int(cx); cy = int(cy)
+        r_pix = int(self.radius)
         g = int(self.gap)
         L = int(self.tick_length)
         w = int(self.tick_thickness)
-        d.line([(cx + r + g, cy), (cx + r + g + L, cy)], fill=self.color, width=w)
-        d.line([(cx - r - g, cy), (cx - r - g - L, cy)], fill=self.color, width=w)
-        d.line([(cx, cy - r - g), (cx, cy - r - g - L)], fill=self.color, width=w)
-        d.line([(cx, cy + r + g), (cx, cy + r + g + L)], fill=self.color, width=w)
+        wt = int(self.ring_thickness)
 
-        # --- 1px center dot ---
+        # --- Circle (ring) ---
+        # cv.circle supports anti-aliased outlines with LINE_AA
+        if r_pix > 0 and wt > 0:
+            cv.circle(img_array, (cx, cy), r_pix, color_bgra, thickness=wt, lineType=cv.LINE_AA, shift=0)
+
+        # --- Ticks (outside only) ---
+        # Right
+        cv.line(img_array, (cx + r_pix + g, cy), (cx + r_pix + g + L, cy), color_bgra, thickness=w, lineType=cv.LINE_AA)
+        # Left
+        cv.line(img_array, (cx - r_pix - g, cy), (cx - r_pix - g - L, cy), color_bgra, thickness=w, lineType=cv.LINE_AA)
+        # Top
+        cv.line(img_array, (cx, cy - r_pix - g), (cx, cy - r_pix - g - L), color_bgra, thickness=w, lineType=cv.LINE_AA)
+        # Bottom
+        cv.line(img_array, (cx, cy + r_pix + g), (cx, cy + r_pix + g + L), color_bgra, thickness=w, lineType=cv.LINE_AA)
+
+        # --- 1 px center dot ---
         if 0 <= cx < W and 0 <= cy < H:
-            # precise single pixel in RGBA
-            pil_img.putpixel((cx, cy), (130, 0, 0, 255))
-            # (equivalent alternative)
-            # d.point((cx, cy), fill=(130, 0, 0, 255))
+            # Because we're in BGRA order, set directly:
+            img_array[cy, cx, :] = (b, g, r, a)
 
-        return np.array(pil_img, dtype=np.uint8)
+        return img_array
 
 
     def update_overlay_image(self, horizontal_y=None, vertical_x=None):

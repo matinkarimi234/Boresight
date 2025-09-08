@@ -8,6 +8,8 @@ import time
 from Record_Manager import MetadataRecorder,RecordingManager
 import os
 
+OVERLAY_COLOR = (180, 0, 0, 255)
+
 # Add global variable to track button press duration
 ok_button_press_start_time = None
 ok_button_press_duration = 0
@@ -112,15 +114,15 @@ def main():
                         font_path="Fonts/digital-7.ttf",
                         font_size=36,
                         pos=('left', 'bottom'),
-                        color=(130, 0, 0, 255),
+                        color= OVERLAY_COLOR,
                         offset=20)
     
     state_overlay = TextOverlay(layer=2003,
                         font_path="Fonts/digital-7.ttf",
-                        rec_color=(130,0,0,255),
+                        rec_color= OVERLAY_COLOR,
                         font_size=36,
                         pos=('right', 'top'),
-                        color=(130, 0, 0, 255),
+                        color= OVERLAY_COLOR,
                         offset=20)
     
 
