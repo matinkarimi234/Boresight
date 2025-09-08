@@ -6,7 +6,7 @@ from State_Machine import StateMachine, StateMachineEnum
 from Alarm import BuzzerControl, LEDControl
 import time
 from Record_Manager import MetadataRecorder,RecordingManager
-import sys
+import os
 
 # Add global variable to track button press duration
 ok_button_press_start_time = None
@@ -172,7 +172,7 @@ def main():
                 if exit_buttons_press_duration >= 3:
                     exit_buttons_press_duration = 0
                     buzzer_control.start_toggle(1, 1, 2)
-                    sys.exit(0)  # clean exit so systemd with Restart=on-failure won't relaunch
+                    os._exit(0)  # hard exit, avoids thread issues
 
             elif current_state == StateMachineEnum.RECORD_STATE:
                 # START recording + metadata on first entry
