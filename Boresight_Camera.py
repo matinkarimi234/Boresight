@@ -172,6 +172,7 @@ def main():
                 if exit_buttons_press_duration >= 3:
                     exit_buttons_press_duration = 0
                     buzzer_control.start_toggle(1, 1, 2)
+                    time.sleep(5)
                     os._exit(0)  # hard exit, avoids thread issues
 
             elif current_state == StateMachineEnum.RECORD_STATE:
