@@ -6,6 +6,7 @@ from State_Machine import StateMachine, StateMachineEnum
 from Alarm import BuzzerControl, LEDControl
 import time
 from Record_Manager import MetadataRecorder,RecordingManager
+import sys
 
 # Add global variable to track button press duration
 ok_button_press_start_time = None
@@ -20,9 +21,13 @@ arrow_buttons_press_duration = 0
 def buttons_state_update_callback(flag):
     global ok_button_press_duration, ok_button_press_start_time, button_left_up_pressed
     global button_right_down_pressed, arrow_buttons_press_start_time, arrow_buttons_press_duration
+    global startup_window_open, startup_abort_requested   # <-- add this
     """Callback to receive flags from ButtonControl."""
     
     if flag == ButtonControl.OK_PRESSED:
+        # If we're still in the startup window, request abort
+        if startup_window_open:                         # <-- add this block
+            startup_abort_requested = True
         # Start a timer when the button is pressed
         ok_button_press_start_time = time.time()
         print("OK button pressed")
@@ -64,8 +69,27 @@ def main():
     led_control = LEDControl(23)
     buzzer_control = BuzzerControl(21)
 
+    # --- EARLY ABORT WINDOW (check OK before camera, overlays, etc.) ---
+    global startup_window_open, startup_abort_requested
+    startup_window_open = True
+
+    # Initialize Button Control first so we can read OK immediately
+    button_control = ButtonControl(lambda flag: buttons_state_update_callback(flag))
+
+    # Give GPIO callbacks a short moment; also allow a quick press during boot
+    abort_deadline = time.time() + 2.0   # window length (seconds); tweak as you like
+    while time.time() < abort_deadline:
+        if startup_abort_requested:
+            print("Startup aborted by OK button; exiting cleanly before camera init.")
+            sys.exit(0)  # clean exit so systemd with Restart=on-failure won't relaunch
+        time.sleep(0.02)
+
+    startup_window_open = False
+    # -------------------------------------------------------------------
+
     # Initialize state machine
     state_machine = StateMachine()
+
     # --- Initialize Camera Setup ---
     camera = CameraSetup()
     camera.start_preview()  # Start the camera preview
