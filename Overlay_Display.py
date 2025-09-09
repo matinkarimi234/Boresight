@@ -51,10 +51,6 @@ class OverlayDisplay:
         H, W, C = img_array.shape
         assert C == 4, "overlay buffer must be RGBA (4 channels)"
 
-        # OpenCV expects BGRA order
-        r, g, b, a = self.color
-        color_bgra = (b, g, r, a)
-
         # Ensure ints
         cx = int(cx); cy = int(cy)
         r_pix = int(self.radius)
@@ -70,18 +66,18 @@ class OverlayDisplay:
 
         # --- Ticks (outside only) ---
         # Right
-        cv.line(img_array, (cx + r_pix + g, cy), (cx + r_pix + g + L, cy), color_bgra, thickness=w, lineType=cv.LINE_AA)
+        cv.line(img_array, (cx + r_pix + g, cy), (cx + r_pix + g + L, cy), self.color, thickness=w, lineType=cv.LINE_AA)
         # Left
-        cv.line(img_array, (cx - r_pix - g, cy), (cx - r_pix - g - L, cy), color_bgra, thickness=w, lineType=cv.LINE_AA)
+        cv.line(img_array, (cx - r_pix - g, cy), (cx - r_pix - g - L, cy), self.color, thickness=w, lineType=cv.LINE_AA)
         # Top
-        cv.line(img_array, (cx, cy - r_pix - g), (cx, cy - r_pix - g - L), color_bgra, thickness=w, lineType=cv.LINE_AA)
+        cv.line(img_array, (cx, cy - r_pix - g), (cx, cy - r_pix - g - L), self.color, thickness=w, lineType=cv.LINE_AA)
         # Bottom
-        cv.line(img_array, (cx, cy + r_pix + g), (cx, cy + r_pix + g + L), color_bgra, thickness=w, lineType=cv.LINE_AA)
+        cv.line(img_array, (cx, cy + r_pix + g), (cx, cy + r_pix + g + L), self.color, thickness=w, lineType=cv.LINE_AA)
 
         # --- 1 px center dot ---
         if 0 <= cx < W and 0 <= cy < H:
             # Because we're in BGRA order, set directly:
-            img_array[cy, cx, :] = (b, g, r, a)
+            img_array[cy, cx, :] = self.color
 
         return img_array
 
