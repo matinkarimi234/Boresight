@@ -25,7 +25,7 @@ class OverlayDisplay:
         self.tick_length = tick_length
         self.tick_thickness = tick_thickness
         self.gap = gap
-        self.color = color[::-1]
+        self.color = color
 
         # Our overlay bitmap is ALWAYS desired_res (no scaling here)
         self.overlay_image = np.zeros((self.desired_res[1], self.desired_res[0], 4), dtype=np.uint8)
