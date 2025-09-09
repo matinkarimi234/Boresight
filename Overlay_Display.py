@@ -7,14 +7,14 @@ import cv2 as cv
 
 class OverlayDisplay:
     OFFSET_FILE = "~/Saved_Videos/overlay_offset.json"
-
+    OVERLAY_COLOR = (180, 0, 0, 255)
     def __init__(self, desired_res=(1280, 720),
                  radius=120,                # circle radius (px)
                  ring_thickness=3,          # circle outline thickness (px)
                  tick_length=80,            # length of outside ticks (px)
                  tick_thickness=3,          # tick line thickness (px)
                  gap=6,                     # gap between circle and tick start (px)
-                 color=(130, 0, 0, 255)):   # RGBA
+                 color=OVERLAY_COLOR):   # RGBA
         self.desired_res = desired_res  # (W, H)
         self.disp = DispmanX(pixel_format="RGBA", buffer_type="numpy", layer=2000)
         self.disp_width, self.disp_height = self.disp.size
@@ -66,7 +66,7 @@ class OverlayDisplay:
         # --- Circle (ring) ---
         # cv.circle supports anti-aliased outlines with LINE_AA
         if r_pix > 0 and wt > 0:
-            cv.circle(img_array, (cx, cy), r_pix, color_bgra, thickness=wt, lineType=cv.LINE_AA, shift=0)
+            cv.circle(img_array, (cx, cy), r_pix, self.color, thickness=wt, lineType=cv.LINE_AA, shift=0)
 
         # --- Ticks (outside only) ---
         # Right
