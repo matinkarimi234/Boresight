@@ -105,7 +105,7 @@ class OverlayDisplay:
         if 0 <= cx < W and 0 <= cy < H:
             img_array[cy, cx, :] = self.color
 
-        # --- Graduated scales (outside the circle only) ---
+        # --- Graduated scales (start from center and go outward) ---
         spacing = int(max(1, self.scale_spacing))
         major_every = max(1, int(self.scale_major_every))
         minor_len = int(self.scale_minor_length)
@@ -119,9 +119,7 @@ class OverlayDisplay:
         show_labels = bool(self.scale_label_show)
         units = str(self.scale_label_units)
 
-        # Helper for drawing text on BGRA: cv.putText works directly on 4-channel arrays.
         def draw_label(text, pos_x, pos_y, align='center'):
-            # compute text size for alignment
             (tw, th), baseline = cv.getTextSize(text, label_font, label_scale, label_thickness)
             x = int(pos_x)
             y = int(pos_y)
@@ -131,98 +129,97 @@ class OverlayDisplay:
             elif align == 'right':
                 x = int(x - tw)
                 y = int(y + th // 2)
-            # clip positions inside image
             x = max(0, min(W - tw - 1, x))
             y = max(th, min(H - 1, y))
             cv.putText(img_array, text, (x, y), label_font, label_scale, self.color, label_thickness, lineType=cv.LINE_AA)
 
-        # Horizontal scale: ticks to the RIGHT starting *outside* the circle
-        # start_x is the first tick position outside the circle + spacing
-        start_x_right = cx + r_pix + g + spacing
-        i = 1
-        x = start_x_right
+        # Horizontal ticks: start at center and go right and left
+        # Right (including center as i=0, but skip drawing a tick at center because we already draw the center dot)
+        i = 0
+        x = cx
         while x < W:
+            is_center = (i == 0)
             is_major = (i % major_every) == 0
             length = major_len if is_major else minor_len
-            # vertical tick centered at cy but entirely outside the circle region
-            y0 = int(np.clip(cy - (length // 2), 0, H - 1))
-            y1 = int(np.clip(cy + (length // 2), 0, H - 1))
-            cv.line(img_array, (x, y0), (x, y1), self.color, thickness=tick_w, lineType=cv.LINE_AA)
 
-            # label for major tick (distance from center in px)
-            if is_major and show_labels:
-                dist = x - cx
-                txt = f"+{dist}{units}"
-                # place label slightly below the tick (so it doesn't overlap)
-                label_x = x
-                # place label below center line for horizontal scale (to not overlap the tick)
-                label_y = cy + (length // 2) + label_offset + int(label_scale * 10)
-                draw_label(txt, label_x, label_y, align='center')
+            if not is_center:
+                y0 = int(np.clip(cy - (length // 2), 0, H - 1))
+                y1 = int(np.clip(cy + (length // 2), 0, H - 1))
+                cv.line(img_array, (x, y0), (x, y1), self.color, thickness=tick_w, lineType=cv.LINE_AA)
 
+                if is_major and show_labels:
+                    dist = x - cx
+                    txt = f"+{dist}{units}"
+                    label_x = x
+                    label_y = cy + (length // 2) + label_offset + int(label_scale * 10)
+                    draw_label(txt, label_x, label_y, align='center')
             i += 1
             x += spacing
 
-        # Horizontal scale left side (outside circle)
-        start_x_left = cx - r_pix - g - spacing
-        i = 1
-        x = start_x_left
+        # Left
+        i = 0
+        x = cx
         while x >= 0:
+            is_center = (i == 0)
             is_major = (i % major_every) == 0
             length = major_len if is_major else minor_len
-            y0 = int(np.clip(cy - (length // 2), 0, H - 1))
-            y1 = int(np.clip(cy + (length // 2), 0, H - 1))
-            cv.line(img_array, (x, y0), (x, y1), self.color, thickness=tick_w, lineType=cv.LINE_AA)
 
-            if is_major and show_labels:
-                dist = cx - x
-                txt = f"-{dist}{units}"
-                label_x = x
-                # place label below center line to keep consistent reading
-                label_y = cy + (length // 2) + label_offset + int(label_scale * 10)
-                draw_label(txt, label_x, label_y, align='center')
+            if not is_center:
+                y0 = int(np.clip(cy - (length // 2), 0, H - 1))
+                y1 = int(np.clip(cy + (length // 2), 0, H - 1))
+                cv.line(img_array, (x, y0), (x, y1), self.color, thickness=tick_w, lineType=cv.LINE_AA)
 
+                if is_major and show_labels:
+                    dist = cx - x
+                    txt = f"-{dist}{units}"
+                    label_x = x
+                    label_y = cy + (length // 2) + label_offset + int(label_scale * 10)
+                    draw_label(txt, label_x, label_y, align='center')
             i += 1
             x -= spacing
 
-        # Vertical scale: ticks downward starting outside circle
-        start_y_down = cy + r_pix + g + spacing
-        i = 1
-        y = start_y_down
+        # Vertical ticks: start at center and go down and up
+        # Down
+        i = 0
+        y = cy
         while y < H:
+            is_center = (i == 0)
             is_major = (i % major_every) == 0
             length = major_len if is_major else minor_len
-            x0 = int(np.clip(cx - (length // 2), 0, W - 1))
-            x1 = int(np.clip(cx + (length // 2), 0, W - 1))
-            cv.line(img_array, (x0, y), (x1, y), self.color, thickness=tick_w, lineType=cv.LINE_AA)
 
-            if is_major and show_labels:
-                dist = y - cy
-                txt = f"+{dist}{units}"
-                label_x = cx + (length // 2) + label_offset + int(label_scale * 6)
-                label_y = y
-                draw_label(txt, label_x, label_y, align='left')
+            if not is_center:
+                x0 = int(np.clip(cx - (length // 2), 0, W - 1))
+                x1 = int(np.clip(cx + (length // 2), 0, W - 1))
+                cv.line(img_array, (x0, y), (x1, y), self.color, thickness=tick_w, lineType=cv.LINE_AA)
 
+                if is_major and show_labels:
+                    dist = y - cy
+                    txt = f"+{dist}{units}"
+                    label_x = cx + (length // 2) + label_offset + int(label_scale * 6)
+                    label_y = y
+                    draw_label(txt, label_x, label_y, align='left')
             i += 1
             y += spacing
 
-        # Vertical scale: ticks upward outside circle
-        start_y_up = cy - r_pix - g - spacing
-        i = 1
-        y = start_y_up
+        # Up
+        i = 0
+        y = cy
         while y >= 0:
+            is_center = (i == 0)
             is_major = (i % major_every) == 0
             length = major_len if is_major else minor_len
-            x0 = int(np.clip(cx - (length // 2), 0, W - 1))
-            x1 = int(np.clip(cx + (length // 2), 0, W - 1))
-            cv.line(img_array, (x0, y), (x1, y), self.color, thickness=tick_w, lineType=cv.LINE_AA)
 
-            if is_major and show_labels:
-                dist = cy - y
-                txt = f"-{dist}{units}"
-                label_x = cx + (length // 2) + label_offset + int(label_scale * 6)
-                label_y = y
-                draw_label(txt, label_x, label_y, align='left')
+            if not is_center:
+                x0 = int(np.clip(cx - (length // 2), 0, W - 1))
+                x1 = int(np.clip(cx + (length // 2), 0, W - 1))
+                cv.line(img_array, (x0, y), (x1, y), self.color, thickness=tick_w, lineType=cv.LINE_AA)
 
+                if is_major and show_labels:
+                    dist = cy - y
+                    txt = f"-{dist}{units}"
+                    label_x = cx + (length // 2) + label_offset + int(label_scale * 6)
+                    label_y = y
+                    draw_label(txt, label_x, label_y, align='left')
             i += 1
             y -= spacing
 
