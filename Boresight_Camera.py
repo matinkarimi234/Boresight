@@ -103,8 +103,8 @@ def main():
     # Create overlays
 
     # --- Initialize Overlay Display ---
-    overlay_display = OverlayDisplay(color=OVERLAY_COLOR)
-    overlay_display.set_style(radius=20, tick_length=300, ring_thickness=1, tick_thickness=1, gap=-10, color=OVERLAY_COLOR)
+    overlay_display = OverlayDisplay(radius=20, tick_length=300, ring_thickness=1, tick_thickness=1, gap=-10, color=OVERLAY_COLOR)
+    overlay_display.set_style(scale_spacing=25, scale_major_every=4, scale_major_length=18, scale_label_font_scale=0.5)
     overlay_display.refresh()
 
     side_bars = ContainerOverlay(bar_width=150, layer=2001, alpha=150)

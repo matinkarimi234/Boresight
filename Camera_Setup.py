@@ -17,3 +17,23 @@ class CameraSetup:
     def stop_preview(self):
         self.camera.stop_preview()
         self.camera.close()
+
+    
+    def center_zoom(self, target_w_px=640, target_h_px=480):
+        """Center-crop to exact px size and let preview scale it.
+        If requested size is larger than sensor frame, reset to full frame.
+        """
+        frame_w, frame_h = self.camera.resolution
+
+        if target_w_px >= frame_w or target_h_px >= frame_h:
+            self.camera.zoom = (0.0, 0.0, 1.0, 1.0)
+            return
+
+        w = float(target_w_px) / float(frame_w)
+        h = float(target_h_px) / float(frame_h)
+        x = 0.5 - (w / 2.0)
+        y = 0.5 - (h / 2.0)
+        x = max(0.0, min(1.0 - w, x))
+        y = max(0.0, min(1.0 - h, y))
+
+        self.camera.zoom = (x, y, w, h)

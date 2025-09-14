@@ -5,53 +5,81 @@ from PIL import Image, ImageDraw, ImageFont
 import threading
 import cv2 as cv
 
+import os
+import json
+import numpy as np
+import cv2 as cv
+
+# Replace with your DispmanX wrapper import if different
+# from your_dispmanx_module import DispmanX
+
 class OverlayDisplay:
     OFFSET_FILE = "~/Saved_Videos/overlay_offset.json"
-    OVERLAY_COLOR = (180, 0, 0, 255)
+    OVERLAY_COLOR = (180, 0, 0, 255)   # BGRA
+
     def __init__(self, desired_res=(1280, 720),
                  radius=120,                # circle radius (px)
                  ring_thickness=3,          # circle outline thickness (px)
                  tick_length=80,            # length of outside ticks (px)
                  tick_thickness=3,          # tick line thickness (px)
                  gap=6,                     # gap between circle and tick start (px)
-                 color=OVERLAY_COLOR):   # RGBA
+                 color=OVERLAY_COLOR):      # RGBA/BGRA
         self.desired_res = desired_res  # (W, H)
+
+        # Create DispmanX display object (your wrapper)
         self.disp = DispmanX(pixel_format="RGBA", buffer_type="numpy", layer=2000)
         self.disp_width, self.disp_height = self.disp.size
 
-        # draw params
-        self.radius = radius
-        self.ring_thickness = ring_thickness
-        self.tick_length = tick_length
-        self.tick_thickness = tick_thickness
-        self.gap = gap
-        self.color = color
+        # draw params (visual)
+        self.radius = int(radius)
+        self.ring_thickness = int(ring_thickness)
+        self.tick_length = int(tick_length)
+        self.tick_thickness = int(tick_thickness)
+        self.gap = int(gap)
+        # color is stored as BGRA tuple for direct array writes / cv drawing on BGRA buffer
+        self.color = tuple(color)
 
-        # Our overlay bitmap is ALWAYS desired_res (no scaling here)
-        self.overlay_image = np.zeros((self.desired_res[1], self.desired_res[0], 4), dtype=np.uint8)
+        # Default scale parameters (can be changed with set_style)
+        self.scale_spacing = 20           # pixels between minor ticks
+        self.scale_major_every = 5        # every Nth tick is major
+        self.scale_minor_length = 8       # minor tick pixel length
+        self.scale_major_length = 16      # major tick pixel length
+        self.scale_tick_thickness = max(1, self.tick_thickness)  # thickness for scale ticks
+        self.scale_label_font = cv.FONT_HERSHEY_SIMPLEX
+        self.scale_label_font_scale = 0.45
+        self.scale_label_thickness = 1
+        self.scale_label_offset = 6       # px offset from tick to label
+        self.scale_label_show = True      # whether to draw numeric labels
+        self.scale_label_units = "px"     # label units string (displayed after number)
 
-        # Center this bitmap once on the display
-        self.offset_x = (self.disp_width  - self.desired_res[0]) // 2
-        self.offset_y = (self.disp_height - self.desired_res[1]) // 2
+        # overlay backing buffer (RGBA)
+        W, H = self.desired_res
+        self.overlay_image = np.zeros((H, W, 4), dtype=np.uint8)
 
+        # center offset to place the bitmap on display
+        self.offset_x = (self.disp_width  - W) // 2
+        self.offset_y = (self.disp_height - H) // 2
+
+        # center coordinates (load saved offsets or default to center)
         self.horizontal_y, self.vertical_x = self.load_offset()
-        # make sure center keeps circle on-screen
         self._clamp_center_to_keep_circle_visible()
 
     def _clamp_center_to_keep_circle_visible(self):
         W, H = self.desired_res
         r = self.radius
+        # keep center such that entire circle remains on the overlay bitmap
         self.vertical_x   = int(np.clip(self.vertical_x,   r, W - 1 - r))
         self.horizontal_y = int(np.clip(self.horizontal_y, r, H - 1 - r))
 
     def _draw_reticle(self, img_array, cx, cy):
         """
-        Anti-aliased reticle drawing using OpenCV on an RGBA (BGRA for cv) numpy buffer.
+        Draw circle, outside ticks, graduated scales (outside-only), and numeric labels.
+        img_array is BGRA (4-channel) numpy array.
         """
         H, W, C = img_array.shape
-        assert C == 4, "overlay buffer must be RGBA (4 channels)"
+        assert C == 4, "overlay buffer must be RGBA/BGRA (4 channels)"
 
-        # Ensure ints
+        # ensure ints
         cx = int(cx); cy = int(cy)
         r_pix = int(self.radius)
         g = int(self.gap)
@@ -60,11 +88,10 @@ class OverlayDisplay:
         wt = int(self.ring_thickness)
 
         # --- Circle (ring) ---
-        # cv.circle supports anti-aliased outlines with LINE_AA
         if r_pix > 0 and wt > 0:
-            cv.circle(img_array, (cx, cy), r_pix, self.color, thickness=wt, lineType=cv.LINE_AA, shift=0)
+            cv.circle(img_array, (cx, cy), r_pix, self.color, thickness=wt, lineType=cv.LINE_AA)
 
-        # --- Ticks (outside only) ---
+        # --- Main outside ticks (existing behavior) ---
         # Right
         cv.line(img_array, (cx + r_pix + g, cy), (cx + r_pix + g + L, cy), self.color, thickness=w, lineType=cv.LINE_AA)
         # Left
@@ -76,11 +103,130 @@ class OverlayDisplay:
 
         # --- 1 px center dot ---
         if 0 <= cx < W and 0 <= cy < H:
-            # Because we're in BGRA order, set directly:
             img_array[cy, cx, :] = self.color
 
-        return img_array
+        # --- Graduated scales (outside the circle only) ---
+        spacing = int(max(1, self.scale_spacing))
+        major_every = max(1, int(self.scale_major_every))
+        minor_len = int(self.scale_minor_length)
+        major_len = int(self.scale_major_length)
+        tick_w = int(max(1, self.scale_tick_thickness))
 
+        label_font = self.scale_label_font
+        label_scale = float(self.scale_label_font_scale)
+        label_thickness = int(max(1, self.scale_label_thickness))
+        label_offset = int(self.scale_label_offset)
+        show_labels = bool(self.scale_label_show)
+        units = str(self.scale_label_units)
+
+        # Helper for drawing text on BGRA: cv.putText works directly on 4-channel arrays.
+        def draw_label(text, pos_x, pos_y, align='center'):
+            # compute text size for alignment
+            (tw, th), baseline = cv.getTextSize(text, label_font, label_scale, label_thickness)
+            x = int(pos_x)
+            y = int(pos_y)
+            if align == 'center':
+                x = int(x - tw // 2)
+                y = int(y + th // 2)
+            elif align == 'right':
+                x = int(x - tw)
+                y = int(y + th // 2)
+            # clip positions inside image
+            x = max(0, min(W - tw - 1, x))
+            y = max(th, min(H - 1, y))
+            cv.putText(img_array, text, (x, y), label_font, label_scale, self.color, label_thickness, lineType=cv.LINE_AA)
+
+        # Horizontal scale: ticks to the RIGHT starting *outside* the circle
+        # start_x is the first tick position outside the circle + spacing
+        start_x_right = cx + r_pix + g + spacing
+        i = 1
+        x = start_x_right
+        while x < W:
+            is_major = (i % major_every) == 0
+            length = major_len if is_major else minor_len
+            # vertical tick centered at cy but entirely outside the circle region
+            y0 = int(np.clip(cy - (length // 2), 0, H - 1))
+            y1 = int(np.clip(cy + (length // 2), 0, H - 1))
+            cv.line(img_array, (x, y0), (x, y1), self.color, thickness=tick_w, lineType=cv.LINE_AA)
+
+            # label for major tick (distance from center in px)
+            if is_major and show_labels:
+                dist = x - cx
+                txt = f"+{dist}{units}"
+                # place label slightly below the tick (so it doesn't overlap)
+                label_x = x
+                # place label below center line for horizontal scale (to not overlap the tick)
+                label_y = cy + (length // 2) + label_offset + int(label_scale * 10)
+                draw_label(txt, label_x, label_y, align='center')
+
+            i += 1
+            x += spacing
+
+        # Horizontal scale left side (outside circle)
+        start_x_left = cx - r_pix - g - spacing
+        i = 1
+        x = start_x_left
+        while x >= 0:
+            is_major = (i % major_every) == 0
+            length = major_len if is_major else minor_len
+            y0 = int(np.clip(cy - (length // 2), 0, H - 1))
+            y1 = int(np.clip(cy + (length // 2), 0, H - 1))
+            cv.line(img_array, (x, y0), (x, y1), self.color, thickness=tick_w, lineType=cv.LINE_AA)
+
+            if is_major and show_labels:
+                dist = cx - x
+                txt = f"-{dist}{units}"
+                label_x = x
+                # place label below center line to keep consistent reading
+                label_y = cy + (length // 2) + label_offset + int(label_scale * 10)
+                draw_label(txt, label_x, label_y, align='center')
+
+            i += 1
+            x -= spacing
+
+        # Vertical scale: ticks downward starting outside circle
+        start_y_down = cy + r_pix + g + spacing
+        i = 1
+        y = start_y_down
+        while y < H:
+            is_major = (i % major_every) == 0
+            length = major_len if is_major else minor_len
+            x0 = int(np.clip(cx - (length // 2), 0, W - 1))
+            x1 = int(np.clip(cx + (length // 2), 0, W - 1))
+            cv.line(img_array, (x0, y), (x1, y), self.color, thickness=tick_w, lineType=cv.LINE_AA)
+
+            if is_major and show_labels:
+                dist = y - cy
+                txt = f"+{dist}{units}"
+                label_x = cx + (length // 2) + label_offset + int(label_scale * 6)
+                label_y = y
+                draw_label(txt, label_x, label_y, align='left')
+
+            i += 1
+            y += spacing
+
+        # Vertical scale: ticks upward outside circle
+        start_y_up = cy - r_pix - g - spacing
+        i = 1
+        y = start_y_up
+        while y >= 0:
+            is_major = (i % major_every) == 0
+            length = major_len if is_major else minor_len
+            x0 = int(np.clip(cx - (length // 2), 0, W - 1))
+            x1 = int(np.clip(cx + (length // 2), 0, W - 1))
+            cv.line(img_array, (x0, y), (x1, y), self.color, thickness=tick_w, lineType=cv.LINE_AA)
+
+            if is_major and show_labels:
+                dist = cy - y
+                txt = f"-{dist}{units}"
+                label_x = cx + (length // 2) + label_offset + int(label_scale * 6)
+                label_y = y
+                draw_label(txt, label_x, label_y, align='left')
+
+            i += 1
+            y -= spacing
+
+        return img_array
 
     def update_overlay_image(self, horizontal_y=None, vertical_x=None):
         if horizontal_y is not None:
@@ -136,15 +282,38 @@ class OverlayDisplay:
         except Exception as e:
             print("Error saving offset:", e)
 
-    # optional: quick setters for live tuning
     def set_style(self, *, radius=None, ring_thickness=None,
-                  tick_length=None, tick_thickness=None, gap=None, color=None):
+                  tick_length=None, tick_thickness=None, gap=None, color=None,
+                  # scale params:
+                  scale_spacing=None, scale_major_every=None,
+                  scale_minor_length=None, scale_major_length=None,
+                  scale_tick_thickness=None,
+                  scale_label_font_scale=None, scale_label_thickness=None,
+                  scale_label_offset=None, scale_label_show=None,
+                  scale_label_units=None):
+        """Change visual style and scale parameters live."""
         if radius is not None: self.radius = int(radius)
         if ring_thickness is not None: self.ring_thickness = int(ring_thickness)
         if tick_length is not None: self.tick_length = int(tick_length)
-        if tick_thickness is not None: self.tick_thickness = int(tick_thickness)
+        if tick_thickness is not None:
+            self.tick_thickness = int(tick_thickness)
+            # keep scale tick thickness sensible
+            self.scale_tick_thickness = max(1, int(tick_thickness))
         if gap is not None: self.gap = int(gap)
         if color is not None: self.color = tuple(color)
+
+        # scale params
+        if scale_spacing is not None: self.scale_spacing = int(scale_spacing)
+        if scale_major_every is not None: self.scale_major_every = max(1, int(scale_major_every))
+        if scale_minor_length is not None: self.scale_minor_length = int(scale_minor_length)
+        if scale_major_length is not None: self.scale_major_length = int(scale_major_length)
+        if scale_tick_thickness is not None: self.scale_tick_thickness = int(scale_tick_thickness)
+        if scale_label_font_scale is not None: self.scale_label_font_scale = float(scale_label_font_scale)
+        if scale_label_thickness is not None: self.scale_label_thickness = int(scale_label_thickness)
+        if scale_label_offset is not None: self.scale_label_offset = int(scale_label_offset)
+        if scale_label_show is not None: self.scale_label_show = bool(scale_label_show)
+        if scale_label_units is not None: self.scale_label_units = str(scale_label_units)
+
         self._clamp_center_to_keep_circle_visible()
         self.refresh()
 
