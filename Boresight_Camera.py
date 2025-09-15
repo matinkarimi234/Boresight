@@ -142,6 +142,7 @@ def main():
 
     def state_machine_thread():
         global ok_button_press_duration, button_left_up_pressed, button_right_down_pressed, arrow_buttons_press_duration, exit_buttons_press_duration
+        global zoom_Step, button_ok_pressed
         nonlocal_rec_started = False  # optional guard
         reticle_STEP = 1  # pixels per tick; tweak as you like
 
