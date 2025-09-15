@@ -19,7 +19,7 @@ class CameraSetup:
         self.camera.close()
 
     
-    def center_zoom_step(self, step: float, max_step: float = 10.0):
+    def center_zoom_step(self, step: float, max_step: float = 8.0):
         """
         Center zoom with a simple step scale:
         step = 1.0 -> full frame (no zoom)

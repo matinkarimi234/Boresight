@@ -168,10 +168,14 @@ def main():
                 if button_left_up_pressed and not button_right_down_pressed and not button_ok_pressed:
                     zoom_Step += 1
 
-                    if zoom_Step > 5:
-                        zoom_Step = 5
+                    if zoom_Step > 8:
+                        zoom_Step = 8
 
-                    state_overlay.set_text(f"Zoom {zoom_Step}x")
+                    if zoom_Step > 1:
+                        state_overlay.set_text(f"Zoom {zoom_Step}x")
+                    else:
+                        state_overlay.set_text("LIVE")  
+
                     buzzer_control.start_toggle(0.5, 1, 1)
 
                     camera.center_zoom_step(zoom_Step)
@@ -181,12 +185,16 @@ def main():
                     zoom_Step -= 1
                     if zoom_Step < 1:
                         zoom_Step = 1
+                    
+                    if zoom_Step > 1:
+                        state_overlay.set_text(f"Zoom {zoom_Step}x")
+                    else:
+                        state_overlay.set_text("LIVE")
 
-                    state_overlay.set_text(f"Zoom {zoom_Step}x")
                     buzzer_control.start_toggle(0.5, 1, 1)
 
                     camera.center_zoom_step(zoom_Step)
-                    
+
 
                 # GOTO RECORDING STATE
                 if arrow_buttons_press_duration >= 3:
