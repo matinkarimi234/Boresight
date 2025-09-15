@@ -25,6 +25,8 @@ arrow_buttons_press_duration = 0
 exit_buttons_start_time = None
 exit_buttons_press_duration = 0
 
+zoom_Step = 1
+
 def buttons_state_update_callback(flag):
     global ok_button_press_duration, ok_button_press_start_time, button_left_up_pressed
     global button_right_down_pressed, arrow_buttons_press_start_time, arrow_buttons_press_duration
@@ -141,7 +143,7 @@ def main():
     def state_machine_thread():
         global ok_button_press_duration, button_left_up_pressed, button_right_down_pressed, arrow_buttons_press_duration, exit_buttons_press_duration
         nonlocal_rec_started = False  # optional guard
-        STEP = 1  # pixels per tick; tweak as you like
+        reticle_STEP = 1  # pixels per tick; tweak as you like
 
         while state_machine.running:
             current_state = state_machine.get_state()
@@ -162,6 +164,30 @@ def main():
                     state_overlay.set_text("H ADJ.")
                     led_control.start_toggle(0.5, 0.5)
 
+                # Zoom_In
+                if button_left_up_pressed and not button_right_down_pressed and not button_ok_pressed:
+                    zoom_Step += 1
+
+                    if zoom_Step > 5:
+                        zoom_Step = 5
+
+                    state_overlay.set_text(f"Zoom {zoom_Step}x")
+                    buzzer_control.start_toggle(0.5, 1, 1)
+
+                    camera.center_zoom_step(zoom_Step)
+
+                # Zoom_Out
+                if button_right_down_pressed and not button_left_up_pressed and not button_ok_pressed:
+                    zoom_Step -= 1
+                    if zoom_Step < 1:
+                        zoom_Step = 1
+
+                    state_overlay.set_text(f"Zoom {zoom_Step}x")
+                    buzzer_control.start_toggle(0.5, 1, 1)
+
+                    camera.center_zoom_step(zoom_Step)
+                    
+
                 # GOTO RECORDING STATE
                 if arrow_buttons_press_duration >= 3:
                     arrow_buttons_press_duration = 0
@@ -176,6 +202,8 @@ def main():
                     buzzer_control.start_toggle(1, 1, 2)
                     time.sleep(5)
                     os._exit(0)  # hard exit, avoids thread issues
+
+
 
             elif current_state == StateMachineEnum.RECORD_STATE:
                 # START recording + metadata on first entry
@@ -203,14 +231,16 @@ def main():
                     print("Sidecar:", record_manager.meta_path)
 
                     state_machine.change_state(StateMachineEnum.SAVING_VIDEO_STATE)
+
+
                     
 
             elif current_state == StateMachineEnum.HORIZONTAL_ADJUSTMENT:
                 # Move vertical line left/right
                 if button_left_up_pressed:
-                    overlay_display.nudge_vertical(-STEP)   # left
+                    overlay_display.nudge_vertical(-reticle_STEP)   # left
                 if button_right_down_pressed:
-                    overlay_display.nudge_vertical(+STEP)   # right
+                    overlay_display.nudge_vertical(+reticle_STEP)   # right
 
                 # faster loop in adjust mode
                 tick = 0.02
@@ -222,12 +252,14 @@ def main():
                     state_overlay.set_text("V ADJ.")
                     state_machine.change_state(StateMachineEnum.VERTICAL_ADJUSTMENT)
 
+
+
             elif current_state == StateMachineEnum.VERTICAL_ADJUSTMENT:
                 # Move horizontal line up/down
                 if button_left_up_pressed:
-                    overlay_display.nudge_horizontal(-STEP)  # up
+                    overlay_display.nudge_horizontal(-reticle_STEP)  # up
                 if button_right_down_pressed:
-                    overlay_display.nudge_horizontal(+STEP)  # down
+                    overlay_display.nudge_horizontal(+reticle_STEP)  # down
 
                 # faster loop in adjust mode
                 tick = 0.02
@@ -239,6 +271,9 @@ def main():
                     buzzer_control.start_toggle(0.5, 1, 1)
                     state_overlay.set_text("LIVE")
                     state_machine.change_state(StateMachineEnum.NORMAL_STATE)
+
+
+
 
             elif current_state == StateMachineEnum.SAVING_VIDEO_STATE:
                 if record_manager.active == False:
