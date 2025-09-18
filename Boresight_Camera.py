@@ -88,7 +88,7 @@ def buttons_state_update_callback(flag):
 
 def main():
     led_control = LEDControl(23)
-    buzzer_control = BuzzerControl(21)
+    buzzer_control = BuzzerControl(12)
 
     # --- Initialize Button Control ---
     button_control = ButtonControl(lambda flag: buttons_state_update_callback(flag))
