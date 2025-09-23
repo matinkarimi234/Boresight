@@ -9,6 +9,7 @@ class CameraSetup:
         self.camera.framerate = framerate
         self.camera.exposure_mode = exposure_mode
         self.camera.awb_mode = awb_mode
+        self.camera.rotation = 180
 
     def start_preview(self):
         self.camera.start_preview(fullscreen=True)
