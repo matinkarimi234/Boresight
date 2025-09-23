@@ -167,34 +167,23 @@ def main():
 
                 # Zoom_In
                 if button_left_up_pressed and not button_right_down_pressed and not button_ok_pressed:
-                    zoom_Step += 1
-
-                    if zoom_Step > 8:
-                        zoom_Step = 8
-
-                    if zoom_Step > 1:
-                        state_overlay.set_text(f"Zoom {zoom_Step}x")
-                    else:
-                        state_overlay.set_text("LIVE")  
-
+                    zoom_Step = min(8, zoom_Step + 1)
+                    state_overlay.set_text(f"Zoom {zoom_Step}x" if zoom_Step > 1 else "LIVE")
                     buzzer_control.start_toggle(0.5, 1, 1)
 
-                    camera.center_zoom_step(zoom_Step)
+                    # NEW: zoom at reticle
+                    nx, ny = overlay_display.reticle_norm_on_display()
+                    camera.center_zoom_step(zoom_Step, reticle_norm=(nx, ny))
 
                 # Zoom_Out
                 if button_right_down_pressed and not button_left_up_pressed and not button_ok_pressed:
-                    zoom_Step -= 1
-                    if zoom_Step < 1:
-                        zoom_Step = 1
-                    
-                    if zoom_Step > 1:
-                        state_overlay.set_text(f"Zoom {zoom_Step}x")
-                    else:
-                        state_overlay.set_text("LIVE")
-
+                    zoom_Step = max(1, zoom_Step - 1)
+                    state_overlay.set_text(f"Zoom {zoom_Step}x" if zoom_Step > 1 else "LIVE")
                     buzzer_control.start_toggle(0.5, 1, 1)
 
-                    camera.center_zoom_step(zoom_Step)
+                    # NEW: zoom at reticle
+                    nx, ny = overlay_display.reticle_norm_on_display()
+                    camera.center_zoom_step(zoom_Step, reticle_norm=(nx, ny))
 
 
                 # GOTO RECORDING STATE

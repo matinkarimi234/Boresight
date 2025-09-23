@@ -224,6 +224,19 @@ class OverlayDisplay:
             y -= spacing
 
         return img_array
+    
+
+    def reticle_norm_on_display(self):
+        """
+        Return (nx, ny) in [0..1] relative to the full display, so we can map
+        the reticle's pixel center (within the overlay bitmap) to the camera zoom.
+        """
+        nx = (self.offset_x + self.vertical_x + 0.5) / float(self.disp_width)
+        ny = (self.offset_y + self.horizontal_y + 0.5) / float(self.disp_height)
+        # clamp for safety
+        nx = max(0.0, min(1.0, nx))
+        ny = max(0.0, min(1.0, ny))
+        return nx, ny
 
     def update_overlay_image(self, horizontal_y=None, vertical_x=None):
         if horizontal_y is not None:

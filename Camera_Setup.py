@@ -20,33 +20,35 @@ class CameraSetup:
         self.camera.close()
 
     
-    def center_zoom_step(self, step: float, max_step: float = 8.0):
-        """
-        Center zoom with a simple step scale:
-        step = 1.0 -> full frame (no zoom)
-        step = 10.0 -> 10x zoom (crop to 1/10 x 1/10 of frame), centered
-        Keeps aspect ratio. Safe to call while previewing/recording.
-        """
-        # clamp (allow fractional steps like 1.5 too)
-        try:
-            z = float(step)
-        except Exception:
-            z = 1.0
-        z = max(1.0, min(float(max_step), z))
+def center_zoom_step(self, step: float, max_step: float = 8.0, reticle_norm=None):
+    """
+    Zoom centered on reticle if reticle_norm=(nx,ny) is provided (0..1).
+    Otherwise, center of frame.
+    """
+    try:
+        z = float(step)
+    except Exception:
+        z = 1.0
+    z = max(1.0, min(float(max_step), z))
 
-        if z <= 1.0001:
-            # full frame
-            self.camera.zoom = (0.0, 0.0, 1.0, 1.0)
-            return
+    if z <= 1.0001:
+        self.camera.zoom = (0.0, 0.0, 1.0, 1.0)
+        return
 
-        # normalized crop width/height; keep aspect ratio by using same factor
-        w = 1.0 / z
-        h = 1.0 / z
-        x = 0.5 - (w / 2.0)
-        y = 0.5 - (h / 2.0)
+    w = 1.0 / z
+    h = 1.0 / z
 
-        # safety clamp
-        x = max(0.0, min(1.0 - w, x))
-        y = max(0.0, min(1.0 - h, y))
+    if reticle_norm is None:
+        nx, ny = 0.5, 0.5
+    else:
+        nx = float(reticle_norm[0])
+        ny = float(reticle_norm[1])
 
-        self.camera.zoom = (x, y, w, h)
+    x = nx - (w / 2.0)
+    y = ny - (h / 2.0)
+
+    # keep ROI inside sensor bounds; if near edges this may shift center slightly
+    x = max(0.0, min(1.0 - w, x))
+    y = max(0.0, min(1.0 - h, y))
+
+    self.camera.zoom = (x, y, w, h)
