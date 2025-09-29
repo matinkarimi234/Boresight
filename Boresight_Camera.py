@@ -103,13 +103,10 @@ def main():
     camera.start_preview()  # Start the camera preview
 
     # Create overlays
-    # 1) Camera first (keeps MMAL happy)
-    camera = CameraSetup()
-    camera.start_preview()            # start once; fullscreen is fine for now
 
-    # 2) Build overlays AFTER camera is up
+    # --- Initialize Overlay Display ---
     overlay_display = OverlayDisplay(radius=20, tick_length=300, ring_thickness=1, tick_thickness=1, gap=-10, color=OVERLAY_COLOR)
-    overlay_display.set_style(scale_spacing=10, scale_major_every=5, scale_major_length=15, scale_minor_length=5, scale_label_show=False, scale_tick_thickness=1)
+    overlay_display.set_style(scale_spacing=10, scale_major_every=5, scale_major_length=15, scale_minor_length=5, scale_label_show= False, scale_tick_thickness=1)
     overlay_display.refresh()
 
     side_bars = ContainerOverlay(bar_width=150, layer=2001, alpha=150)
@@ -136,7 +133,6 @@ def main():
                               scale=0.35,
                               offset=20)                # or (width, height)
     static_png.show()  # draws once and done
-
 
 
     record_manager = RecordingManager(base_dir="/home/boresight/Saved_Videos")
@@ -174,8 +170,7 @@ def main():
                     zoom_Step = min(8, zoom_Step + 1)
                     state_overlay.set_text(f"Zoom {zoom_Step}x" if zoom_Step > 1 else "LIVE")
                     buzzer_control.start_toggle(0.5, 1, 1)
-
-                    # NEW: zoom at reticle
+                    
                     camera.center_zoom_step_at_reticle(zoom_Step, overlay_display)
 
                 # Zoom_Out
@@ -184,7 +179,6 @@ def main():
                     state_overlay.set_text(f"Zoom {zoom_Step}x" if zoom_Step > 1 else "LIVE")
                     buzzer_control.start_toggle(0.5, 1, 1)
 
-                    # NEW: zoom at reticle
                     camera.center_zoom_step_at_reticle(zoom_Step, overlay_display)
 
 
