@@ -231,6 +231,7 @@ class OverlayDisplay:
         Return (nx, ny) in [0..1] relative to the full display, so we can map
         the reticle's pixel center (within the overlay bitmap) to the camera zoom.
         """
+        print(f"Display W: {self.disp_width} , H: {self.disp_height}")
         nx = (self.offset_x + self.vertical_x + 0.5) / float(self.disp_width)
         ny = (self.offset_y + self.horizontal_y + 0.5) / float(self.disp_height)
         # clamp for safety
