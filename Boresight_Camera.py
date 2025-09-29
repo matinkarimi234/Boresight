@@ -104,13 +104,9 @@ def main():
 
     # Create overlays
 
-    camera = CameraSetup()
+    # --- Initialize Overlay Display ---
     overlay_display = OverlayDisplay(radius=20, tick_length=300, ring_thickness=1, tick_thickness=1, gap=-10, color=OVERLAY_COLOR)
-    overlay_display.set_style(scale_spacing=10, scale_major_every=5, scale_major_length=15, scale_minor_length=5, scale_label_show=False, scale_tick_thickness=1)
-
-    # IMPORTANT: start preview with the overlay rectangle so coordinates match 1:1
-    camera.start_preview(overlay=overlay_display)
-
+    overlay_display.set_style(scale_spacing=10, scale_major_every=5, scale_major_length=15, scale_minor_length=5, scale_label_show= False, scale_tick_thickness=1)
     overlay_display.refresh()
 
     side_bars = ContainerOverlay(bar_width=150, layer=2001, alpha=150)
