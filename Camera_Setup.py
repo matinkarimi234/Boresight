@@ -48,7 +48,7 @@ class CameraSetup:
         y = ny - (h / 2.0)
 
         # keep ROI inside sensor bounds; if near edges this may shift center slightly
-        x = max(0.0, min(1.0 - w, x))
-        y = max(0.0, min(1.0 - h, y))
+        # x = max(0.0, min(1.0 - w, x))
+        # y = max(0.0, min(1.0 - h, y))
 
         self.camera.zoom = (x, y, w, h)
