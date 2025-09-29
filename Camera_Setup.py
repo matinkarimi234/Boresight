@@ -37,10 +37,33 @@ class CameraSetup:
         return max(0.0, min(1.0, sx)), max(0.0, min(1.0, sy))
 
     def _reticle_to_sensor_norm(self, overlay):
+        """
+        Map reticle display pixel -> normalized coords inside the *current* preview.
+        Works for both fullscreen (window=(0,0,0,0)) and windowed preview.
+        """
         rx, ry = overlay.reticle_display_px()
-        px, py, pw, ph = self.camera.preview.window  # current preview rect
+
+        # Try to read current preview window
+        try:
+            px, py, pw, ph = self.camera.preview.window
+        except Exception:
+            px = py = pw = ph = 0
+
+        # If fullscreen, picamera reports (0,0,0,0). Use the *display* size.
+        if pw <= 0 or ph <= 0:
+            # use DispmanX display size from your overlay
+            disp_w, disp_h = overlay.disp_width, overlay.disp_height
+            px, py, pw, ph = 0, 0, disp_w, disp_h
+
+        # Normalized coords inside the preview rect
         nx = (rx - px + 0.5) / float(pw)
         ny = (ry - py + 0.5) / float(ph)
+
+        # Clamp to [0,1] just in case
+        nx = 0.0 if nx < 0.0 else (1.0 if nx > 1.0 else nx)
+        ny = 0.0 if ny < 0.0 else (1.0 if ny > 1.0 else ny)
+
+        # Undo rotation/flips so we end in sensor-normalized coords
         return self._apply_rotation_flips_to_preview_norm(nx, ny)
 
     def center_zoom_step_at_reticle(self, step: float, overlay, max_step: float = 8.0):
