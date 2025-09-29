@@ -137,10 +137,6 @@ def main():
                               offset=20)                # or (width, height)
     static_png.show()  # draws once and done
 
-    # 3) Now align the preview to the overlay rectangle (no extra latency)
-    x, y, w, h = overlay_display.overlay_display_rect()
-    camera.camera.preview.fullscreen = False
-    camera.camera.preview.window    = (x, y, w, h)
 
 
     record_manager = RecordingManager(base_dir="/home/boresight/Saved_Videos")
