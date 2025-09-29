@@ -20,35 +20,46 @@ class CameraSetup:
         self.camera.close()
 
     
-    def center_zoom_step(self, step: float, max_step: float = 8.0, reticle_norm=None):
-        """
-        Zoom centered on reticle if reticle_norm=(nx,ny) is provided (0..1).
-        Otherwise, center of frame.
-        """
-        try:
-            z = float(step)
-        except Exception:
-            z = 1.0
+    def _apply_rotation_flips_to_preview_norm(self, nx, ny):
+        r = (self.camera.rotation or 0) % 360
+        if r == 0:
+            sx, sy = nx, ny
+        elif r == 90:
+            sx, sy = ny, 1.0 - nx
+        elif r == 180:
+            sx, sy = 1.0 - nx, 1.0 - ny
+        elif r == 270:
+            sx, sy = 1.0 - ny, nx
+        else:
+            sx, sy = nx, ny
+        if self.camera.hflip: sx = 1.0 - sx
+        if self.camera.vflip: sy = 1.0 - sy
+        return max(0.0, min(1.0, sx)), max(0.0, min(1.0, sy))
+
+    def _reticle_to_sensor_norm(self, overlay):
+        rx, ry = overlay.reticle_display_px()
+        px, py, pw, ph = self.camera.preview.window  # current preview rect
+        nx = (rx - px + 0.5) / float(pw)
+        ny = (ry - py + 0.5) / float(ph)
+        return self._apply_rotation_flips_to_preview_norm(nx, ny)
+
+    def center_zoom_step_at_reticle(self, step: float, overlay, max_step: float = 8.0):
+        try: z = float(step)
+        except: z = 1.0
         z = max(1.0, min(float(max_step), z))
 
+        cx, cy = self._reticle_to_sensor_norm(overlay)
+
+        # limit zoom so ROI never clamps (prevents drift/jumps near edges)
+        eps = 1e-6
+        z_max_x = 1.0 / max(eps, 2.0 * min(cx, 1.0 - cx))
+        z_max_y = 1.0 / max(eps, 2.0 * min(cy, 1.0 - cy))
+        z = min(z, z_max_x, z_max_y)
+
         if z <= 1.0001:
-            self.camera.zoom = (0.0, 0.0, 1.0, 1.0)
-            return
+            self.camera.zoom = (0.0, 0.0, 1.0, 1.0); return
 
-        w = 1.0 / z
-        h = 1.0 / z
-
-        if reticle_norm is None:
-            nx, ny = 0.5, 0.5
-        else:
-            nx = float(reticle_norm[0])
-            ny = float(reticle_norm[1])
-
-        x = nx - (w / 2.0)
-        y = ny - (h / 2.0)
-
-        # keep ROI inside sensor bounds; if near edges this may shift center slightly
-        x = max(0.0, min(1.0 - w, x))
-        y = max(0.0, min(1.0 - h, y))
-
+        w = 1.0 / z; h = 1.0 / z
+        x = max(0.0, min(1.0 - w, cx - w/2.0))
+        y = max(0.0, min(1.0 - h, cy - h/2.0))
         self.camera.zoom = (x, y, w, h)

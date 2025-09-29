@@ -71,6 +71,13 @@ class OverlayDisplay:
         self.vertical_x   = int(np.clip(self.vertical_x,   r, W - 1 - r))
         self.horizontal_y = int(np.clip(self.horizontal_y, r, H - 1 - r))
 
+    def reticle_display_px(self):
+        return self.offset_x + int(self.vertical_x), self.offset_y + int(self.horizontal_y)
+
+    def overlay_display_rect(self):
+        W, H = self.desired_res
+        return self.offset_x, self.offset_y, W, H
+
     def _draw_reticle(self, img_array, cx, cy):
         """
         Draw circle, outside ticks, graduated scales (outside-only), and numeric labels.

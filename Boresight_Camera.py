@@ -103,10 +103,13 @@ def main():
     camera.start_preview()  # Start the camera preview
 
     # Create overlays
+    # 1) Camera first (keeps MMAL happy)
+    camera = CameraSetup()
+    camera.start_preview()            # start once; fullscreen is fine for now
 
-    # --- Initialize Overlay Display ---
+    # 2) Build overlays AFTER camera is up
     overlay_display = OverlayDisplay(radius=20, tick_length=300, ring_thickness=1, tick_thickness=1, gap=-10, color=OVERLAY_COLOR)
-    overlay_display.set_style(scale_spacing=10, scale_major_every=5, scale_major_length=15, scale_minor_length=5, scale_label_show= False, scale_tick_thickness=1)
+    overlay_display.set_style(scale_spacing=10, scale_major_every=5, scale_major_length=15, scale_minor_length=5, scale_label_show=False, scale_tick_thickness=1)
     overlay_display.refresh()
 
     side_bars = ContainerOverlay(bar_width=150, layer=2001, alpha=150)
@@ -133,6 +136,11 @@ def main():
                               scale=0.35,
                               offset=20)                # or (width, height)
     static_png.show()  # draws once and done
+
+    # 3) Now align the preview to the overlay rectangle (no extra latency)
+    x, y, w, h = overlay_display.overlay_display_rect()
+    camera.camera.preview.fullscreen = False
+    camera.camera.preview.window    = (x, y, w, h)
 
 
     record_manager = RecordingManager(base_dir="/home/boresight/Saved_Videos")
@@ -172,8 +180,7 @@ def main():
                     buzzer_control.start_toggle(0.5, 1, 1)
 
                     # NEW: zoom at reticle
-                    nx, ny = overlay_display.reticle_norm_on_display()
-                    camera.center_zoom_step(zoom_Step, reticle_norm=(nx, ny))
+                    camera.center_zoom_step_at_reticle(zoom_Step, overlay_display)
 
                 # Zoom_Out
                 if button_right_down_pressed and not button_left_up_pressed and not button_ok_pressed:
@@ -182,8 +189,7 @@ def main():
                     buzzer_control.start_toggle(0.5, 1, 1)
 
                     # NEW: zoom at reticle
-                    nx, ny = overlay_display.reticle_norm_on_display()
-                    camera.center_zoom_step(zoom_Step, reticle_norm=(nx, ny))
+                    camera.center_zoom_step_at_reticle(zoom_Step, overlay_display)
 
 
                 # GOTO RECORDING STATE
