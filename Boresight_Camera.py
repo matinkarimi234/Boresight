@@ -104,6 +104,13 @@ def main():
 
     # Create overlays
 
+    # Ask overlay (or DispmanX) for display size to match the screen
+    dummy_overlay_for_size = OverlayDisplay()  # if you don't have it yet, you can read DispmanX directly
+    disp_w, disp_h = dummy_overlay_for_size.disp_width, dummy_overlay_for_size.disp_height
+
+    camera.camera.start_preview(fullscreen=False, window=(0, 0, disp_w, disp_h))
+    # Now create your real overlays (reticle, text, bars, etc.) AFTER the preview is up.
+
     # --- Initialize Overlay Display ---
     overlay_display = OverlayDisplay(radius=20, tick_length=300, ring_thickness=1, tick_thickness=1, gap=-10, color=OVERLAY_COLOR)
     overlay_display.set_style(scale_spacing=10, scale_major_every=5, scale_major_length=15, scale_minor_length=5, scale_label_show= False, scale_tick_thickness=1)
@@ -170,7 +177,7 @@ def main():
                     zoom_Step = min(8, zoom_Step + 1)
                     state_overlay.set_text(f"Zoom {zoom_Step}x" if zoom_Step > 1 else "LIVE")
                     buzzer_control.start_toggle(0.5, 1, 1)
-                    
+
                     camera.center_zoom_step_at_reticle(zoom_Step, overlay_display)
 
                 # Zoom_Out
