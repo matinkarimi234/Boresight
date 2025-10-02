@@ -97,8 +97,8 @@ class CameraSetup:
             sx, sy = self._display_to_sensor_inverse(nx_in, ny_in)
 
         # 2) Build ROI centered at (sx,sy) with DISPLAY aspect (prevents stretching)
-        roi = self._roi_exact_center_display_aspect(sx, sy, z)
-
+        # roi = self._roi_exact_center_display_aspect(sx, sy, z)
+        roi = self._roi_exact_center_video_aspect(sx, sy, z) 
         # 3) Apply zoom
         self.camera.zoom = roi
 
@@ -210,6 +210,42 @@ class CameraSetup:
         if x + w > 1.0: x = 1.0 - w
         if y + h > 1.0: y = 1.0 - h
         return (x, y, w, h)
+    
+    def _roi_exact_center_video_aspect(self, center_x, center_y, zoom):
+        # exact-centered box with the **camera stream** aspect (no stretch)
+        cx = 0.0 if center_x < 0.0 else (1.0 if center_x > 1.0 else float(center_x))
+        cy = 0.0 if center_y < 0.0 else (1.0 if center_y > 1.0 else float(center_y))
+
+        rw, rh = self.camera.resolution  # <- use the actual stream aspect
+        ar = float(rw) / float(rh) if rh else (16.0/9.0)
+
+        Z = max(1.0, float(zoom))
+        h = 1.0 / Z
+        w = h * ar
+        if w > 1.0:
+            s = 1.0 / w
+            w *= s; h *= s
+
+        max_w_all = 2.0 * min(cx, 1.0 - cx)
+        max_h_all = 2.0 * min(cy, 1.0 - cy)
+        max_w_from_h = max_h_all * ar
+        if max_w_all > max_w_from_h:
+            max_w, max_h = max_w_from_h, max_h_all
+        else:
+            max_w, max_h = max_w_all, max_w_all / ar
+
+        if w > max_w or h > max_h:
+            s = min(max_w / w, max_h / h)
+            w *= s; h *= s
+
+        x = cx - w/2.0
+        y = cy - h/2.0
+        if x < 0.0: x = 0.0
+        if y < 0.0: y = 0.0
+        if x + w > 1.0: x = 1.0 - w
+        if y + h > 1.0: y = 1.0 - h
+        return (x, y, w, h)
+
 
     # ---------- Projection back to display ----------
     def _project_sensor_point_to_display_after_roi(self, sx, sy, roi):
