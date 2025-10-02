@@ -184,7 +184,7 @@ def main():
         global ok_button_press_duration, button_left_up_pressed, button_right_down_pressed, arrow_buttons_press_duration, exit_buttons_press_duration
         global zoom_Step, button_ok_pressed
         global prezoom_reticle_px
-        global current_zoom
+        global current_zoom,zoom_anchor_nxny
 
         reticle_STEP = 1  # pixels per tick
         print("[thread] state machine loop entered", flush=True)
@@ -212,7 +212,6 @@ def main():
 
                 # ---- Zoom In ----
                 if button_left_up_pressed and not button_right_down_pressed and not button_ok_pressed:
-                    global zoom_anchor_nxny, prezoom_reticle_px, current_zoom
 
                     if current_zoom == 1:
                         # entering zoom: remember overlay pixel pos (for restore) and world anchor (for ROI)
@@ -236,7 +235,6 @@ def main():
 
                 # ---- Zoom Out ----
                 if button_right_down_pressed and not button_left_up_pressed and not button_ok_pressed:
-                    global zoom_anchor_nxny, prezoom_reticle_px, current_zoom
 
                     current_zoom = max(1, current_zoom - 1)
                     state_overlay.set_text(f"Zoom {current_zoom}x" if current_zoom > 1 else "LIVE")
