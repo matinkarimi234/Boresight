@@ -23,7 +23,7 @@ class CameraSetup:
         from picamera import PiCamera
         self.camera = PiCamera()
         self.camera.resolution    = resolution
-        # self.camera.sensor_mode = sensor_mode  # uncomment if you rely on a specific mode
+        self.camera.sensor_mode = sensor_mode  # uncomment if you rely on a specific mode
         self.camera.iso           = iso
         self.camera.framerate     = framerate
         self.camera.exposure_mode = exposure_mode

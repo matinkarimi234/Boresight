@@ -144,6 +144,9 @@ def main():
     prezoom_reticle_px = None   # (x_px, y_px) saved when going from 1x -> >1x
     current_zoom = 1
 
+    print("disp:", overlay_display.disp_width, overlay_display.disp_height)
+    print("cam :", camera.camera.resolution)
+
     def center_overlay_reticle():
         overlay_display.center_on_screen(refresh=True)
 
