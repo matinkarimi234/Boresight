@@ -4,16 +4,15 @@ import time
 class CameraSetup:
     """
     Zoom helper for PiCamera that:
-      - Maps reticle from DISPLAY-normalized -> SENSOR-normalized with selectable mapping order.
-      - Builds an exact-centered ROI with DISPLAY aspect (e.g., 16:9) to prevent stretching.
+      - Maps reticle from DISPLAY-normalized -> SENSOR-normalized.
+      - Auto-selects mapping order (forward vs inverse) each zoom to avoid mirrored jumps.
+      - Builds an exact-centered, quantized ROI with the *camera video* aspect (no stretching).
       - Applies camera.zoom.
-      - Projects the SAME sensor point back to DISPLAY after zoom, so the caller can
-        move the overlay reticle and keep it on the target.
+      - Projects the SAME sensor point back to DISPLAY after zoom so callers can use it if needed.
 
     Notes:
-      - If left/right looks reversed on your hardware, set mapping_mode='inverse'
-        (or call set_mapping_mode('inverse')).
-      - At 1x, this returns the SAME (nx,ny) you pass in (no reticle reset).
+      - While zoomed (>1x), snap the overlay reticle to exact screen center (0.5, 0.5).
+      - When returning to 1x, restore the saved pre-zoom reticle position.
     """
 
     def __init__(self, resolution=(1280, 720), sensor_mode=5, iso=800, framerate=30,
@@ -23,7 +22,7 @@ class CameraSetup:
         from picamera import PiCamera
         self.camera = PiCamera()
         self.camera.resolution    = resolution
-        self.camera.sensor_mode = sensor_mode  # uncomment if you rely on a specific mode
+        self.camera.sensor_mode   = sensor_mode
         self.camera.iso           = iso
         self.camera.framerate     = framerate
         self.camera.exposure_mode = exposure_mode
@@ -34,20 +33,22 @@ class CameraSetup:
         self.camera.hflip    = bool(hflip)
         self.camera.vflip    = bool(vflip)
 
-        # Mapping order selector (fixes "reverse" symptom)
+        # User preference; we still auto-pick per-zoom for robustness
         self._mapping_mode = mapping_mode if mapping_mode in ('forward', 'inverse') else 'forward'
 
-        # Optional override: display aspect (w/h). If None, derive from resolution (or 16:9).
+        # Optional override: display aspect (w/h). If None, derive from resolution.
         self._display_aspect = None
 
     # ---------- Public API ----------
-    # def start_preview(self, fullscreen=True):
-    #     self.camera.start_preview(fullscreen=fullscreen)
-    #     time.sleep(0.2)
+    def start_preview(self, fullscreen=True, **kw):
+        self.camera.start_preview(fullscreen=fullscreen, **kw)
+        time.sleep(0.2)
 
     def stop_preview(self):
-        self.camera.stop_preview()
-        self.camera.close()
+        try:
+            self.camera.stop_preview()
+        finally:
+            self.camera.close()
 
     def set_display_aspect(self, w, h):
         """Tell CameraSetup what aspect the preview fills (e.g., 1280x720)."""
@@ -61,7 +62,7 @@ class CameraSetup:
         if vflip    is not None: self.camera.vflip    = bool(vflip)
 
     def set_mapping_mode(self, mode: str):
-        """'forward' or 'inverse'. Use 'inverse' if left/right feels swapped."""
+        """'forward' or 'inverse' (kept for manual override / debugging)."""
         m = (mode or '').strip().lower()
         if m in ('forward', 'inverse'):
             self._mapping_mode = m
@@ -71,7 +72,8 @@ class CameraSetup:
         Center the zoom on the reticle (DISPLAY-normalized), apply it, and return where that
         SAME world point appears on the display AFTER the zoom.
         Return value: (nx_after, ny_after) in [0..1].
-        - At 1x, returns the SAME (nx,ny) you passed (so your overlay won't reset).
+        - At 1x, returns the SAME (nx,ny) you passed (so overlay won’t reset).
+        - For >1x, you should snap the overlay reticle to (0.5, 0.5) visually.
         """
         # sanitize zoom
         try: z = float(step)
@@ -90,28 +92,40 @@ class CameraSetup:
             self.camera.zoom = (0.0, 0.0, 1.0, 1.0)
             return nx_in, ny_in
 
-        # 1) DISPLAY -> SENSOR (choose mapping mode that matches your rig)
-        if self._mapping_mode == 'forward':
-            sx, sy = self._display_to_sensor_forward(nx_in, ny_in)
-        else:
-            sx, sy = self._display_to_sensor_inverse(nx_in, ny_in)
+        # ---- Auto-select mapping: try both and choose the one that lands closest to (0.5, 0.5) ----
+        candidates = []
 
-        # 2) Build ROI centered at (sx,sy) with DISPLAY aspect (prevents stretching)
-        # roi = self._roi_exact_center_display_aspect(sx, sy, z)
-        # roi = self._roi_exact_center_video_aspect(sx, sy, z) 
-        roi = self._roi_for_zoom(sx, sy, z)
+        # Candidate A: 'forward'
+        sxA, syA = self._display_to_sensor_forward(nx_in, ny_in)
+        roiA = self._roi_for_zoom(sxA, syA, z)
+        uA = (sxA - roiA[0]) / roiA[2]; vA = (syA - roiA[1]) / roiA[3]
+        nxA, nyA = self._sensor_to_display_inverse(uA, vA)  # inverse of forward
+        errA = (nxA - 0.5)**2 + (nyA - 0.5)**2
+        candidates.append(('forward', roiA, (nxA, nyA), errA))
+
+        # Candidate B: 'inverse'
+        sxB, syB = self._display_to_sensor_inverse(nx_in, ny_in)
+        roiB = self._roi_for_zoom(sxB, syB, z)
+        uB = (sxB - roiB[0]) / roiB[2]; vB = (syB - roiB[1]) / roiB[3]
+        nxB, nyB = self._sensor_to_display_forward(uB, vB)  # forward of inverse
+        errB = (nxB - 0.5)**2 + (nyB - 0.5)**2
+        candidates.append(('inverse', roiB, (nxB, nyB), errB))
+
+        # Pick the mapping whose projected point is closest to screen center
+        mode, roi, (nx_after, ny_after), _ = min(candidates, key=lambda t: t[3])
+        self._mapping_mode = mode  # remember what worked (nice for consistency)
+
+        # Apply zoom
         self.camera.zoom = roi
-
-        # 4) Project the SAME sensor point back to DISPLAY after crop/scale/orientation
-        nx_after, ny_after = self._project_sensor_point_to_display_after_roi(sx, sy, roi)
         return nx_after, ny_after
-    
+
+    # ---------- Quantized, video-aspect ROI ----------
     def _roi_exact_center_video_aspect_quantized(self, center_x, center_y, zoom):
         """
         Exact-centered (x,y,w,h) in SENSOR-normalized coords with:
-        - aspect = camera.resolution (video stream)
-        - sizes quantized to even pixels (avoid MMAL rounding/stretch)
-        - if near edges, shrink (don't slide) to keep center exact
+          - aspect = camera.resolution (video stream)
+          - sizes quantized to even pixels (avoid MMAL rounding/stretch)
+          - if near edges, shrink (don't slide) to keep center exact
         """
         # --- inputs clamped ---
         cx = float(center_x); cy = float(center_y)
@@ -125,14 +139,12 @@ class CameraSetup:
         Z = max(1.0, float(zoom))
 
         # --- target size in OUTPUT pixels (quantize to even) ---
-        # start from ideal sizes
         h_pix = rh / Z
         w_pix = h_pix * ar
 
-        # quantize to even pixels to satisfy chroma subsampling & GPU alignments
-        def even(i): 
+        def even(i):
             i = int(round(i))
-            return i if (i % 2 == 0) else (i-1 if i>1 else 2)
+            return i if (i % 2 == 0) else (i-1 if i > 1 else 2)
 
         h_pix = max(2, even(h_pix))
         w_pix = max(2, even(w_pix))
@@ -192,19 +204,18 @@ class CameraSetup:
         """Wrapper to choose the quantized, video-aspect ROI."""
         return self._roi_exact_center_video_aspect_quantized(sx, sy, z)
 
-
     # ---------- Mapping helpers ----------
     def _display_to_sensor_forward(self, nx, ny):
         """
-        DISPLAY-normalized -> SENSOR-normalized using the SAME order the preview applies
-        (commonly: flips first, then rotation). Often correct for rotation=180 rigs.
+        DISPLAY-normalized -> SENSOR-normalized using the SAME order preview often applies:
+        flips first, then rotation.
         """
         x, y = float(nx), float(ny)
         r  = (int(self.camera.rotation) // 90) % 4
         hf = bool(self.camera.hflip)
         vf = bool(self.camera.vflip)
 
-        # forward: apply flips, then rotation
+        # flips, then rotation
         if hf: x = 1.0 - x
         if vf: y = 1.0 - y
 
@@ -223,8 +234,7 @@ class CameraSetup:
     def _display_to_sensor_inverse(self, nx_disp, ny_disp):
         """
         DISPLAY-normalized -> SENSOR-normalized by UNDOing rotation first, then flips.
-        Use this if your stack applies transforms in the opposite order and left/right
-        look reversed with 'forward'.
+        Use this if your stack applies transforms in the opposite order.
         """
         x, y = float(nx_disp), float(ny_disp)
         r  = (int(self.camera.rotation) // 90) % 4
@@ -247,92 +257,34 @@ class CameraSetup:
         y = 0.0 if y < 0.0 else (1.0 if y > 1.0 else y)
         return x, y
 
-    # ---------- ROI builder ----------
-    @staticmethod
-    def _clamp01(v):
-        return 0.0 if v < 0.0 else (1.0 if v > 1.0 else v)
-
-    def _roi_exact_center_display_aspect(self, center_x, center_y, zoom):
+    def _sensor_to_display_forward(self, u, v):
         """
-        Build (x,y,w,h) in SENSOR-normalized coords:
-          - exact center at (center_x, center_y)
-          - width/height match DISPLAY aspect (no stretch on 1280x720)
-          - if near edges, SHRINK box (don't slide) so center remains exact
+        Forward of _display_to_sensor_inverse:
+          - apply rotation
+          - then apply flips
+        Input u,v are pre-orientation preview-normalized (0..1).
         """
-        cx = self._clamp01(float(center_x))
-        cy = self._clamp01(float(center_y))
+        x, y = float(u), float(v)
+        r  = (int(self.camera.rotation) // 90) % 4
+        hf = bool(self.camera.hflip)
+        vf = bool(self.camera.vflip)
 
-        # choose aspect: prefer caller-set display aspect, else derive from resolution, else 16:9
-        if self._display_aspect is not None:
-            ar = float(self._display_aspect)
-        else:
-            rw, rh = self.camera.resolution
-            ar = (rw / float(rh)) if rh else (16.0 / 9.0)
+        # apply rotation
+        if r == 1:
+            x, y = 1.0 - y, x
+        elif r == 2:
+            x, y = 1.0 - x, 1.0 - y
+        elif r == 3:
+            x, y = y, 1.0 - x
 
-        Z = max(1.0, float(zoom))
-        h = 1.0 / Z
-        w = h * ar
-        if w > 1.0:
-            s = 1.0 / w
-            w *= s; h *= s
+        # then flips
+        if hf: x = 1.0 - x
+        if vf: y = 1.0 - y
 
-        # largest centered box (same aspect) that fits at (cx,cy)
-        max_w_all = 2.0 * min(cx, 1.0 - cx)
-        max_h_all = 2.0 * min(cy, 1.0 - cy)
-        max_w_from_h = max_h_all * ar
-        if max_w_all > max_w_from_h:
-            max_w = max_w_from_h; max_h = max_h_all
-        else:
-            max_w = max_w_all;    max_h = max_w_all / ar
-
-        # shrink uniformly if requested box would spill
-        if w > max_w or h > max_h:
-            s = min(max_w / w, max_h / h)
-            w *= s; h *= s
-
-        x = cx - w / 2.0
-        y = cy - h / 2.0
-        if x < 0.0: x = 0.0
-        if y < 0.0: y = 0.0
-        if x + w > 1.0: x = 1.0 - w
-        if y + h > 1.0: y = 1.0 - h
-        return (x, y, w, h)
-    
-    def _roi_exact_center_video_aspect(self, center_x, center_y, zoom):
-        # exact-centered box with the **camera stream** aspect (no stretch)
-        cx = 0.0 if center_x < 0.0 else (1.0 if center_x > 1.0 else float(center_x))
-        cy = 0.0 if center_y < 0.0 else (1.0 if center_y > 1.0 else float(center_y))
-
-        rw, rh = self.camera.resolution  # <- use the actual stream aspect
-        ar = float(rw) / float(rh) if rh else (16.0/9.0)
-
-        Z = max(1.0, float(zoom))
-        h = 1.0 / Z
-        w = h * ar
-        if w > 1.0:
-            s = 1.0 / w
-            w *= s; h *= s
-
-        max_w_all = 2.0 * min(cx, 1.0 - cx)
-        max_h_all = 2.0 * min(cy, 1.0 - cy)
-        max_w_from_h = max_h_all * ar
-        if max_w_all > max_w_from_h:
-            max_w, max_h = max_w_from_h, max_h_all
-        else:
-            max_w, max_h = max_w_all, max_w_all / ar
-
-        if w > max_w or h > max_h:
-            s = min(max_w / w, max_h / h)
-            w *= s; h *= s
-
-        x = cx - w/2.0
-        y = cy - h/2.0
-        if x < 0.0: x = 0.0
-        if y < 0.0: y = 0.0
-        if x + w > 1.0: x = 1.0 - w
-        if y + h > 1.0: y = 1.0 - h
-        return (x, y, w, h)
-
+        # clamp
+        x = 0.0 if x < 0.0 else (1.0 if x > 1.0 else x)
+        y = 0.0 if y < 0.0 else (1.0 if y > 1.0 else y)
+        return x, y
 
     # ---------- Projection back to display ----------
     def _project_sensor_point_to_display_after_roi(self, sx, sy, roi):

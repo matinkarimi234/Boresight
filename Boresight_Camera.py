@@ -313,11 +313,22 @@ def main():
     except KeyboardInterrupt:
         print("Exiting...")
     finally:
-        overlay_display.save_offset()
+        try: 
+            side_bars.hide()
+        except: 
+            pass
+        try:
+             static_png.hide()
+        except:
+            pass
+        # clear the reticle layer completely
+        try:
+            overlay_display.disp.buffer[:] = 0
+            overlay_display.disp.update()
+        except:
+            pass
+        
         camera.stop_preview()
-
-        if record_manager.active:
-            record_manager.stop(camera.camera)
 
         state_machine.stop()
 
