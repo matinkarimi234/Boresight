@@ -141,7 +141,7 @@ def main():
 
     record_manager = RecordingManager(base_dir="/home/boresight/Saved_Videos")
 
-
+    camera.set_mapping_mode('inverse')
 
 
     def state_machine_thread():

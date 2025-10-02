@@ -3,38 +3,45 @@ import time
 
 class CameraSetup:
     """
-    Camera helper that:
-      - Maps reticle position from DISPLAY-normalized -> SENSOR-normalized.
-      - Builds an exact-centered ROI with the DISPLAY aspect (e.g., 16:9), so no stretching.
-      - Applies camera.zoom to that ROI.
-      - Projects the SAME sensor point back to DISPLAY coords after zoom,
-        so the caller can reposition the overlay reticle and keep it glued to the target.
+    Zoom helper for PiCamera that:
+      - Maps reticle from DISPLAY-normalized -> SENSOR-normalized with selectable mapping order.
+      - Builds an exact-centered ROI with DISPLAY aspect (e.g., 16:9) to prevent stretching.
+      - Applies camera.zoom.
+      - Projects the SAME sensor point back to DISPLAY after zoom, so the caller can
+        move the overlay reticle and keep it on the target.
 
-    Assumes fullscreen preview that fills the monitor (no letterbox).
+    Notes:
+      - If left/right looks reversed on your hardware, set mapping_mode='inverse'
+        (or call set_mapping_mode('inverse')).
+      - At 1x, this returns the SAME (nx,ny) you pass in (no reticle reset).
     """
 
     def __init__(self, resolution=(1280, 720), sensor_mode=5, iso=800, framerate=30,
-                 exposure_mode='auto', awb_mode='auto', rotation=180, hflip=False, vflip=False):
+                 exposure_mode='auto', awb_mode='auto',
+                 rotation=180, hflip=False, vflip=False,
+                 mapping_mode='forward'):
         from picamera import PiCamera
         self.camera = PiCamera()
-        self.camera.resolution    = resolution        # keep 16:9 for a 1280x720 monitor
-        # self.camera.sensor_mode = sensor_mode       # uncomment if you rely on a specific mode
+        self.camera.resolution    = resolution
+        # self.camera.sensor_mode = sensor_mode  # uncomment if you rely on a specific mode
         self.camera.iso           = iso
         self.camera.framerate     = framerate
         self.camera.exposure_mode = exposure_mode
         self.camera.awb_mode      = awb_mode
 
-        # Orientation (influences display<->sensor mapping)
+        # Orientation (affects display<->sensor mapping)
         self.camera.rotation = int(rotation)  # 0, 90, 180, 270
         self.camera.hflip    = bool(hflip)
         self.camera.vflip    = bool(vflip)
 
-        # Optional override: display aspect (w/h). If None, derive from resolution (or 16:9 fallback).
-        self._display_aspect = None  # e.g., 1280/720
+        # Mapping order selector (fixes "reverse" symptom)
+        self._mapping_mode = mapping_mode if mapping_mode in ('forward', 'inverse') else 'forward'
+
+        # Optional override: display aspect (w/h). If None, derive from resolution (or 16:9).
+        self._display_aspect = None
 
     # ---------- Public API ----------
     def start_preview(self, fullscreen=True):
-        """Start preview. We assume it fills the screen (no letterbox)."""
         self.camera.start_preview(fullscreen=fullscreen)
         time.sleep(0.2)
 
@@ -53,14 +60,18 @@ class CameraSetup:
         if hflip    is not None: self.camera.hflip    = bool(hflip)
         if vflip    is not None: self.camera.vflip    = bool(vflip)
 
+    def set_mapping_mode(self, mode: str):
+        """'forward' or 'inverse'. Use 'inverse' if left/right feels swapped."""
+        m = (mode or '').strip().lower()
+        if m in ('forward', 'inverse'):
+            self._mapping_mode = m
+
     def center_zoom_step(self, step: float, max_step: float = 8.0, reticle_norm_display=None):
         """
-        Center the zoom on the reticle (given in DISPLAY-normalized coords),
-        apply it, and return where that SAME world point appears on the display
-        AFTER the zoom. Use the returned (nx_after, ny_after) to move your overlay reticle.
-
-        Returns:
-            (nx_after, ny_after) in [0..1]. At 1x, (0.5, 0.5).
+        Center the zoom on the reticle (DISPLAY-normalized), apply it, and return where that
+        SAME world point appears on the display AFTER the zoom.
+        Return value: (nx_after, ny_after) in [0..1].
+        - At 1x, returns the SAME (nx,ny) you passed (so your overlay won't reset).
         """
         # sanitize zoom
         try: z = float(step)
@@ -68,21 +79,22 @@ class CameraSetup:
         if z < 1.0: z = 1.0
         if z > float(max_step): z = float(max_step)
 
-        # 1x -> full frame
-        if z <= 1.0001:
-            self.camera.zoom = (0.0, 0.0, 1.0, 1.0)
-            return 0.5, 0.5
-
         # default reticle center if none provided
         if reticle_norm_display is None:
-            nx, ny = 0.5, 0.5
+            nx_in, ny_in = 0.5, 0.5
         else:
-            nx, ny = float(reticle_norm_display[0]), float(reticle_norm_display[1])
+            nx_in, ny_in = float(reticle_norm_display[0]), float(reticle_norm_display[1])
 
-        # 1) DISPLAY -> SENSOR (choose forward mapping; flip to inverse if your rig needs it)
-        # sx, sy = self._display_to_sensor_forward(nx, ny)
-        # If forward doesn't land exactly on your reticle, swap to:
-        sx, sy = self._display_to_sensor_inverse(nx, ny)
+        # 1x -> full frame; do NOT recenter overlay (return same coords)
+        if z <= 1.0001:
+            self.camera.zoom = (0.0, 0.0, 1.0, 1.0)
+            return nx_in, ny_in
+
+        # 1) DISPLAY -> SENSOR (choose mapping mode that matches your rig)
+        if self._mapping_mode == 'forward':
+            sx, sy = self._display_to_sensor_forward(nx_in, ny_in)
+        else:
+            sx, sy = self._display_to_sensor_inverse(nx_in, ny_in)
 
         # 2) Build ROI centered at (sx,sy) with DISPLAY aspect (prevents stretching)
         roi = self._roi_exact_center_display_aspect(sx, sy, z)
@@ -98,7 +110,7 @@ class CameraSetup:
     def _display_to_sensor_forward(self, nx, ny):
         """
         DISPLAY-normalized -> SENSOR-normalized using the SAME order the preview applies
-        (commonly: flips first, then rotation). This often matches rotation=180 rigs.
+        (commonly: flips first, then rotation). Often correct for rotation=180 rigs.
         """
         x, y = float(nx), float(ny)
         r  = (int(self.camera.rotation) // 90) % 4
@@ -124,7 +136,8 @@ class CameraSetup:
     def _display_to_sensor_inverse(self, nx_disp, ny_disp):
         """
         DISPLAY-normalized -> SENSOR-normalized by UNDOing rotation first, then flips.
-        Use this if your stack applies transforms in the opposite order.
+        Use this if your stack applies transforms in the opposite order and left/right
+        look reversed with 'forward'.
         """
         x, y = float(nx_disp), float(ny_disp)
         r  = (int(self.camera.rotation) // 90) % 4
@@ -156,7 +169,7 @@ class CameraSetup:
         """
         Build (x,y,w,h) in SENSOR-normalized coords:
           - exact center at (center_x, center_y)
-          - width/height match DISPLAY aspect (prevents stretching on your 1280x720 monitor)
+          - width/height match DISPLAY aspect (no stretch on 1280x720)
           - if near edges, SHRINK box (don't slide) so center remains exact
         """
         cx = self._clamp01(float(center_x))
@@ -208,7 +221,8 @@ class CameraSetup:
         # crop+scale into ROI space
         u = (float(sx) - x) / w
         v = (float(sy) - y) / h
-        # then undo the forward mapping to get display coords
+
+        # inverse of the *forward* mapping to reach display coords
         nx_disp, ny_disp = self._sensor_to_display_inverse(u, v)
         # clamp
         nx_disp = 0.0 if nx_disp < 0.0 else (1.0 if nx_disp > 1.0 else nx_disp)
