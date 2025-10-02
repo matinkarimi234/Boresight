@@ -175,8 +175,13 @@ def main():
                     state_overlay.set_text(f"Zoom {zoom_Step}x" if zoom_Step > 1 else "LIVE")
                     buzzer_control.start_toggle(0.5, 1, 1)
 
-                    nx, ny = overlay_display.reticle_norm_on_display()
-                    camera.center_zoom_step(zoom_Step, reticle_norm_display=(nx, ny))
+                    nx0, ny0 = overlay_display.reticle_norm_on_display()
+                    nx1, ny1 = camera.center_zoom_step(zoom_Step, reticle_norm_display=(nx0, ny0))
+
+                    # convert display-normalized (nx1,ny1) to overlay pixel coords and set
+                    x_px = int(nx1 * overlay_display.disp_width)  - overlay_display.offset_x
+                    y_px = int(ny1 * overlay_display.disp_height) - overlay_display.offset_y
+                    overlay_display.set_center(x_px, y_px, refresh=True)
 
                 # Zoom_Out
                 if button_right_down_pressed and not button_left_up_pressed and not button_ok_pressed:
@@ -184,8 +189,12 @@ def main():
                     state_overlay.set_text(f"Zoom {zoom_Step}x" if zoom_Step > 1 else "LIVE")
                     buzzer_control.start_toggle(0.5, 1, 1)
 
-                    nx, ny = overlay_display.reticle_norm_on_display()
-                    camera.center_zoom_step(zoom_Step, reticle_norm_display=(nx, ny))
+                    nx0, ny0 = overlay_display.reticle_norm_on_display()
+                    nx1, ny1 = camera.center_zoom_step(zoom_Step, reticle_norm_display=(nx0, ny0))
+
+                    x_px = int(nx1 * overlay_display.disp_width)  - overlay_display.offset_x
+                    y_px = int(ny1 * overlay_display.disp_height) - overlay_display.offset_y
+                    overlay_display.set_center(x_px, y_px, refresh=True)
 
 
                 # GOTO RECORDING STATE  
