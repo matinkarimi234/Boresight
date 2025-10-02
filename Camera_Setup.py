@@ -111,6 +111,33 @@ class CameraSetup:
         if x > 1.0: x = 1.0
         if y > 1.0: y = 1.0
         return x, y
+    
+    def _display_to_sensor_forward(self, nx, ny):
+        """
+        DISPLAY-normalized -> SENSOR-normalized using the SAME transform order
+        the preview applies (often: FLIP then ROTATE).
+        """
+        x, y = float(nx), float(ny)
+        r = (int(self.camera.rotation) // 90) % 4
+        hf = bool(self.camera.hflip)
+        vf = bool(self.camera.vflip)
+
+        # Forward order: apply flips, then rotation
+        if hf: x = 1.0 - x
+        if vf: y = 1.0 - y
+
+        if r == 1:       # +90
+            x, y = y, 1.0 - x
+        elif r == 2:     # 180
+            x, y = 1.0 - x, 1.0 - y
+        elif r == 3:     # +270
+            x, y = 1.0 - y, x
+
+        # clamp
+        x = 0.0 if x < 0.0 else (1.0 if x > 1.0 else x)
+        y = 0.0 if y < 0.0 else (1.0 if y > 1.0 else y)
+        return x, y
+
 
     @staticmethod
     def _clamp01(v):
