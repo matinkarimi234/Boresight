@@ -33,6 +33,7 @@ class CameraSetup:
         preview fills the screen (no letterbox) and only applies orientation mapping.
         """
         self.camera.start_preview(fullscreen=fullscreen)
+        print(self.camera.resolution)
         time.sleep(0.2)  # let it settle
 
     def stop_preview(self):

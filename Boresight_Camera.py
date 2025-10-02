@@ -110,9 +110,7 @@ def main():
     overlay_display.refresh()
 
     camera.set_display_aspect(overlay_display.disp_width, overlay_display.disp_height)  # 1280x720 → 16:9
-
-    print(overlay_display.disp_width)
-    print(camera)
+    
 
 
     side_bars = ContainerOverlay(bar_width=150, layer=2001, alpha=150)
