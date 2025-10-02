@@ -132,7 +132,7 @@ def main():
         print("[boot] preview started (fullscreen fallback)", flush=True)
 
     # If left/right feels reversed on your rig, 'inverse' fixes it. Use 'forward' otherwise.
-    camera.set_mapping_mode('forward')
+    camera.set_mapping_mode('inverse')
 
     # 🔧 Make sure overlays are transparent where there’s no drawing
     # (OverlayDisplay already draws with alpha=0 background; ContainerOverlay below uses semi-alpha)
