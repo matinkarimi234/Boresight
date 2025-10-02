@@ -86,7 +86,7 @@ def buttons_state_update_callback(flag):
 def main():
     led_control = LEDControl(23)
     buzzer_control = BuzzerControl(12)
-    global prezoom_reticle_px, current_zoom
+    global prezoom_reticle_px, current_zoom, zoom_anchor_nxny
 
     print("[boot] starting...", flush=True)
 
