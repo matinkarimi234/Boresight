@@ -18,7 +18,7 @@ class CameraSetup:
 
     def __init__(self, resolution=(1280, 720), sensor_mode=5, iso=800, framerate=30,
                  exposure_mode='auto', awb_mode='auto',
-                 rotation=180, hflip=False, vflip=False,
+                 rotation=0, hflip=False, vflip=False,
                  mapping_mode='forward'):
         from picamera import PiCamera
         self.camera = PiCamera()
