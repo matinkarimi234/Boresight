@@ -110,7 +110,7 @@ def main():
     overlay_display.refresh()
 
     camera.set_display_aspect(overlay_display.disp_width, overlay_display.disp_height)  # 1280x720 → 16:9
-    
+
 
 
     side_bars = ContainerOverlay(bar_width=150, layer=2001, alpha=150)
@@ -176,7 +176,7 @@ def main():
                     buzzer_control.start_toggle(0.5, 1, 1)
 
                     nx, ny = overlay_display.reticle_norm_on_display()
-                    camera.center_zoom_step(zoom_Step, reticle_norm_display=(nx, ny))
+                    camera.center_zoom_step(zoom_Step, reticle_norm_display=(0.7, 0.5))
 
                 # Zoom_Out
                 if button_right_down_pressed and not button_left_up_pressed and not button_ok_pressed:
@@ -185,7 +185,7 @@ def main():
                     buzzer_control.start_toggle(0.5, 1, 1)
 
                     nx, ny = overlay_display.reticle_norm_on_display()
-                    camera.center_zoom_step(zoom_Step, reticle_norm_display=(nx, ny))
+                    camera.center_zoom_step(zoom_Step, reticle_norm_display=(0.7, 0.5))
 
 
                 # GOTO RECORDING STATE  
