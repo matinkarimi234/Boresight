@@ -86,7 +86,7 @@ def buttons_state_update_callback(flag):
 def main():
     led_control = LEDControl(23)
     buzzer_control = BuzzerControl(12)
-    global prezoom_reticle_px
+    global prezoom_reticle_px, current_zoom
 
     print("[boot] starting...", flush=True)
 
@@ -162,8 +162,11 @@ def main():
     record_manager = RecordingManager(base_dir="/home/boresight/Saved_Videos")
 
     # ---- Zoom/reticle behavior state ----
-    prezoom_reticle_px = None   # (x_px, y_px) saved when going from 1x -> >1x
+    # ---- Zoom/reticle behavior state ----
+    prezoom_reticle_px = None         # (x_px, y_px) saved when going from 1x -> >1x
+    zoom_anchor_nxny = None           # (nx, ny) display-normalized anchor while zoomed
     current_zoom = 1
+
 
     print(f"[boot] cam={camera.camera.resolution}", flush=True)
 
@@ -181,7 +184,7 @@ def main():
         global ok_button_press_duration, button_left_up_pressed, button_right_down_pressed, arrow_buttons_press_duration, exit_buttons_press_duration
         global zoom_Step, button_ok_pressed
         global prezoom_reticle_px
-        nonlocal current_zoom
+        global current_zoom
 
         reticle_STEP = 1  # pixels per tick
         print("[thread] state machine loop entered", flush=True)
@@ -209,33 +212,48 @@ def main():
 
                 # ---- Zoom In ----
                 if button_left_up_pressed and not button_right_down_pressed and not button_ok_pressed:
+                    global zoom_anchor_nxny, prezoom_reticle_px, current_zoom
+
                     if current_zoom == 1:
+                        # entering zoom: remember overlay pixel pos (for restore) and world anchor (for ROI)
                         prezoom_reticle_px = overlay_display.get_center()
+                        zoom_anchor_nxny = overlay_display.reticle_norm_on_display()  # <-- anchor once
 
                     current_zoom = min(8, current_zoom + 1)
                     state_overlay.set_text(f"Zoom {current_zoom}x" if current_zoom > 1 else "LIVE")
                     buzzer_control.start_toggle(0.5, 1, 1)
 
-                    nx0, ny0 = overlay_display.reticle_norm_on_display()
-                    camera.center_zoom_step(current_zoom, reticle_norm_display=(nx0, ny0))
-                    center_overlay_reticle()
-                    print(f"[zoom] in -> {current_zoom}x at ({nx0:.3f},{ny0:.3f})", flush=True)
+                    # always use the same world anchor while zoomed
+                    nx_anchor, ny_anchor = zoom_anchor_nxny if zoom_anchor_nxny else overlay_display.reticle_norm_on_display()
+                    camera.center_zoom_step(current_zoom, reticle_norm_display=(nx_anchor, ny_anchor))
+
+                    # snap overlay to screen center while zoomed
+                    if current_zoom > 1:
+                        center_overlay_reticle()
+
+                    print(f"[zoom] in -> {current_zoom}x anchor=({nx_anchor:.3f},{ny_anchor:.3f})")
+
 
                 # ---- Zoom Out ----
                 if button_right_down_pressed and not button_left_up_pressed and not button_ok_pressed:
+                    global zoom_anchor_nxny, prezoom_reticle_px, current_zoom
+
                     current_zoom = max(1, current_zoom - 1)
                     state_overlay.set_text(f"Zoom {current_zoom}x" if current_zoom > 1 else "LIVE")
                     buzzer_control.start_toggle(0.5, 1, 1)
 
                     if current_zoom > 1:
-                        nx0, ny0 = overlay_display.reticle_norm_on_display()
-                        camera.center_zoom_step(current_zoom, reticle_norm_display=(nx0, ny0))
+                        # keep zooming around the original world anchor
+                        nx_anchor, ny_anchor = zoom_anchor_nxny if zoom_anchor_nxny else overlay_display.reticle_norm_on_display()
+                        camera.center_zoom_step(current_zoom, reticle_norm_display=(nx_anchor, ny_anchor))
                         center_overlay_reticle()
-                        print(f"[zoom] out -> {current_zoom}x at ({nx0:.3f},{ny0:.3f})", flush=True)
+                        print(f"[zoom] out -> {current_zoom}x anchor=({nx_anchor:.3f},{ny_anchor:.3f})")
                     else:
+                        # back to 1x: reset zoom and restore pre-zoom reticle pos; clear the anchor
                         camera.center_zoom_step(1.0, reticle_norm_display=None)
                         restore_overlay_reticle()
-                        print("[zoom] back to 1x; reticle restored", flush=True)
+                        zoom_anchor_nxny = None
+                        print("[zoom] back to 1x; reticle restored")
 
                 # GOTO RECORDING STATE
                 if arrow_buttons_press_duration >= 3:
