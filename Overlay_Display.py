@@ -124,6 +124,62 @@ class OverlayDisplay:
         self.center_x_px = int(np.clip(self.center_x_px, r, W - 1 - r))
         self.center_y_px = int(np.clip(self.center_y_px, r, H - 1 - r))
 
+    def set_style(self, *, radius=None, ring_thickness=None,
+              tick_length=None, tick_thickness=None, gap=None, color=None,
+              # scale params:
+              scale_spacing=None, scale_major_every=None,
+              scale_minor_length=None, scale_major_length=None,
+              scale_tick_thickness=None,
+              scale_label_font_scale=None, scale_label_thickness=None,
+              scale_label_offset=None, scale_label_show=None,
+              scale_label_units=None):
+        """
+        Change visual style and scale parameters live.
+        Mirrors your original API so existing calls in main() keep working.
+        """
+        if radius is not None:
+            self.radius = int(radius)
+        if ring_thickness is not None:
+            self.ring_thickness = int(ring_thickness)
+        if tick_length is not None:
+            self.tick_length = int(tick_length)
+        if tick_thickness is not None:
+            self.tick_thickness = int(tick_thickness)
+            # keep scale tick thickness sensible if not explicitly set below
+            if scale_tick_thickness is None:
+                self.scale_tick_thickness = max(1, int(tick_thickness))
+        if gap is not None:
+            self.gap = int(gap)
+        if color is not None:
+            self.color = tuple(color)
+
+        # scale params
+        if scale_spacing is not None:
+            self.scale_spacing = int(scale_spacing)
+        if scale_major_every is not None:
+            self.scale_major_every = max(1, int(scale_major_every))
+        if scale_minor_length is not None:
+            self.scale_minor_length = int(scale_minor_length)
+        if scale_major_length is not None:
+            self.scale_major_length = int(scale_major_length)
+        if scale_tick_thickness is not None:
+            self.scale_tick_thickness = int(scale_tick_thickness)
+        if scale_label_font_scale is not None:
+            self.scale_label_font_scale = float(scale_label_font_scale)
+        if scale_label_thickness is not None:
+            self.scale_label_thickness = int(scale_label_thickness)
+        if scale_label_offset is not None:
+            self.scale_label_offset = int(scale_label_offset)
+        if scale_label_show is not None:
+            self.scale_label_show = bool(scale_label_show)
+        if scale_label_units is not None:
+            self.scale_label_units = str(scale_label_units)
+
+        # keep center valid after size changes and redraw
+        self._clamp_center_to_keep_circle_visible()
+        self.refresh()
+
+
     # Public helpers (handy for UI logic)
     def center_on_screen(self, refresh=True):
         """Move reticle to exact overlay center (which sits at display center)."""
