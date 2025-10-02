@@ -4,7 +4,7 @@ from Camera_Setup import CameraSetup
 from Overlay_Display import OverlayDisplay, StaticPNGOverlay, TextOverlay, ContainerOverlay
 from State_Machine import StateMachine, StateMachineEnum
 from Alarm import BuzzerControl, LEDControl
-import time
+import time, datetime
 import jdatetime
 from Record_Manager import MetadataRecorder,RecordingManager
 import os
@@ -377,10 +377,10 @@ def main():
     try:
         while True:
             time.sleep(0.05)
-
+            dt  = datetime.datetime.now()
             # Clock update once per second
-            now_time = time.strftime("%H:%M:%S")
-            jdate_str = jdatetime.datetime.fromgregorian(time).strftime('%Y/%m/%d')
+            now_time = dt.strftime("%H:%M:%S")
+            jdate_str = jdatetime.datetime.fromgregorian(dt).strftime('%Y/%m/%d')
             if now_time != last_sec:
                 last_sec = now_time
                 clock_overlay.set_text(now_time)
