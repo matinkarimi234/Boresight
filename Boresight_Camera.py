@@ -107,7 +107,6 @@ def main():
 
     # --- Initialize Camera Setup ---
     camera = CameraSetup()
-    camera.set_orientation(rotation=0, hflip=True, vflip=True)
     camera.camera.zoom = (0.0, 0.0, 1.0, 1.0)  # reset zoom
 
     # --- Initialize Overlay Display ---
@@ -225,7 +224,7 @@ def main():
 
                     # always use the same world anchor while zoomed
                     nx_anchor, ny_anchor = zoom_anchor_nxny if zoom_anchor_nxny else overlay_display.reticle_norm_on_display()
-                    camera.center_zoom_step(current_zoom, reticle_norm_display=(nx_anchor, ny_anchor))
+                    camera.center_zoom_step(current_zoom, reticle_norm_display=(1.0 - nx_anchor, 1.0 - ny_anchor))
 
                     # snap overlay to screen center while zoomed
                     if current_zoom > 1:
@@ -244,7 +243,7 @@ def main():
                     if current_zoom > 1:
                         # keep zooming around the original world anchor
                         nx_anchor, ny_anchor = zoom_anchor_nxny if zoom_anchor_nxny else overlay_display.reticle_norm_on_display()
-                        camera.center_zoom_step(current_zoom, reticle_norm_display=(nx_anchor, ny_anchor))
+                        camera.center_zoom_step(current_zoom, reticle_norm_display=(1.0 - nx_anchor, 1.0 - ny_anchor))
                         center_overlay_reticle()
                         print(f"[zoom] out -> {current_zoom}x anchor=({nx_anchor:.3f},{ny_anchor:.3f})")
                     else:
