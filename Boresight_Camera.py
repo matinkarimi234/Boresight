@@ -268,10 +268,10 @@ def main():
                             if prezoom_reticle_px:
                                 overlay_display.set_center(*prezoom_reticle_px, refresh=True)
 
-                    # clear zoom state
-                    zoom_anchor_sensor = None
-                    zoom_anchor_dirty = False
-                    prezoom_reticle_px = None
+                        # clear zoom state
+                        zoom_anchor_sensor = None
+                        zoom_anchor_dirty = False
+                        prezoom_reticle_px = None
 
                 if current_state in (StateMachineEnum.HORIZONTAL_ADJUSTMENT, StateMachineEnum.VERTICAL_ADJUSTMENT) and current_zoom > 1:
                     # reticle position on the display (already inverted for 180 by your overlay)
