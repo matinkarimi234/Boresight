@@ -109,6 +109,7 @@ def main():
     overlay_display.set_style(scale_spacing=10, scale_major_every=5, scale_major_length=15, scale_minor_length=5, scale_label_show=False, scale_tick_thickness=1)
     overlay_display.refresh()
 
+    camera.set_display_aspect(overlay_display.disp_width, overlay_display.disp_height)  # 1280x720 → 16:9
 
 
     side_bars = ContainerOverlay(bar_width=150, layer=2001, alpha=150)
@@ -186,7 +187,7 @@ def main():
                     camera.center_zoom_step(zoom_Step, reticle_norm_display=(nx, ny))
 
 
-                # GOTO RECORDING STATE
+                # GOTO RECORDING STATE  
                 if arrow_buttons_press_duration >= 3:
                     arrow_buttons_press_duration = 0
                     buzzer_control.start_toggle(0.5, 1, 1)

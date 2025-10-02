@@ -24,6 +24,7 @@ class CameraSetup:
         self.camera.rotation = int(rotation)  # 0, 90, 180, 270
         self.camera.hflip    = bool(hflip)
         self.camera.vflip    = bool(vflip)
+        self._display_aspect = None  # width / height (e.g., 16/9)
 
     # ---------- Public API ----------
     def start_preview(self, fullscreen=True):
@@ -38,6 +39,11 @@ class CameraSetup:
         self.camera.stop_preview()
         self.camera.close()
 
+    def set_display_aspect(self, w, h):
+        """Tell CameraSetup what aspect the preview fills (e.g., 1280x720)."""
+        w = float(w); h = float(h)
+        self._display_aspect = (w / h) if (w > 0 and h > 0) else None
+
     def set_orientation(self, *, rotation=None, hflip=None, vflip=None):
         """Optional: change orientation at runtime."""
         if rotation is not None:
@@ -48,45 +54,28 @@ class CameraSetup:
             self.camera.vflip = bool(vflip)
 
     def center_zoom_step(self, step: float, max_step: float = 8.0, reticle_norm_display=None):
-        """
-        Apply zoom such that the ROI is centered on the given reticle position.
-
-        Parameters
-        ----------
-        step : float
-            Zoom level (1..max_step). 1 means full frame.
-        max_step : float
-            Maximum allowed zoom factor (clamped).
-        reticle_norm_display : (nx, ny) or None
-            Reticle center in DISPLAY-normalized coords (0..1). If None, uses (0.5, 0.5).
-        """
-        # sanitize zoom
         try:
             z = float(step)
         except Exception:
             z = 1.0
-        if z < 1.0:
-            z = 1.0
-        if z > float(max_step):
-            z = float(max_step)
+        if z < 1.0: z = 1.0
+        if z > float(max_step): z = float(max_step)
 
-        # no zoom -> full frame
         if z <= 1.0001:
             self.camera.zoom = (0.0, 0.0, 1.0, 1.0)
             return
 
-        # map reticle from DISPLAY-normalized to SENSOR-normalized (inverse orientation only)
+        # Map display-normalized reticle to sensor-normalized (keep whichever mapping worked for you)
         if reticle_norm_display is None:
             cx, cy = 0.5, 0.5
         else:
             nx, ny = float(reticle_norm_display[0]), float(reticle_norm_display[1])
-            cx, cy = self._display_to_sensor_no_letterbox(nx, ny)
+            # If you used the 'forward' mapping and it landed on the reticle, keep it:
+            cx, cy = self._display_to_sensor_forward(nx, ny)
+            # If that missed on your rig, switch to the inverse version:
+            # cx, cy = self._display_to_sensor_inverse(nx, ny)
 
-        # exact-center ROI with the camera mode's aspect (prevents GPU clamping drift)
-        mode_w, mode_h = self.camera.resolution
-        roi = self._roi_exact_center(cx, cy, z, mode_w, mode_h)
-
-        # apply
+        roi = self._roi_exact_center_display_aspect(cx, cy, z)
         self.camera.zoom = roi
 
     # ---------- Internal helpers ----------
@@ -124,30 +113,39 @@ class CameraSetup:
         return x, y
 
     @staticmethod
-    def _roi_exact_center(center_x, center_y, zoom, mode_w, mode_h):
-        """
-        Build (x, y, w, h) in [0..1] keeping the exact center (cx,cy).
-        The ROI uses the camera mode aspect (mode_w:mode_h). If the requested
-        box would spill outside near edges, it SHRINKS w/h (same aspect) so the
-        center remains exact; it never slides.
-        """
-        Z  = 1.0 if zoom < 1.0 else float(zoom)
-        ar = mode_w / float(mode_h)  # e.g., ~1.777... for 16:9
+    def _clamp01(v):
+        return 0.0 if v < 0.0 else (1.0 if v > 1.0 else v)
 
-        # Start from height; width follows aspect
+    def _roi_exact_center_display_aspect(self, center_x, center_y, zoom):
+        """
+        Build (x,y,w,h) with aspect = display aspect (e.g., 16:9).
+        Keeps the center EXACT. If near edges, SHRINK (no sliding).
+        """
+        cx = self._clamp01(float(center_x))
+        cy = self._clamp01(float(center_y))
+
+        # Choose aspect: prefer display (prevents any stretch on your 1280x720 monitor)
+        if self._display_aspect is not None:
+            ar = float(self._display_aspect)               # width / height (e.g., 1.777...)
+        else:
+            mw, mh = self.camera.resolution
+            ar = mw / float(mh) if mh else 16.0/9.0
+
+        Z = 1.0 if zoom < 1.0 else float(zoom)
+
+        # Make a box with w/h = ar and linear shrink 1/Z
+        # Use height as the primary dimension (stable), width follows aspect
         h = 1.0 / Z
         w = h * ar
 
-        # Fit into [0..1] if width spills
+        # If too wide to fit, scale both down (rare unless ar is very wide)
         if w > 1.0:
             s = 1.0 / w
-            w *= s
-            h *= s
+            w *= s; h *= s
 
-        # Maximum centered box (same aspect) around (center_x, center_y) that fits
-        max_w_all = 2.0 * min(center_x, 1.0 - center_x)
-        max_h_all = 2.0 * min(center_y, 1.0 - center_y)
-
+        # Compute the largest box (same aspect) centered at (cx,cy) that fits
+        max_w_all = 2.0 * min(cx, 1.0 - cx)
+        max_h_all = 2.0 * min(cy, 1.0 - cy)
         # Enforce aspect on the max box
         max_w_from_h = max_h_all * ar
         if max_w_all > max_w_from_h:
@@ -157,16 +155,15 @@ class CameraSetup:
             max_w = max_w_all
             max_h = max_w_all / ar
 
-        # If requested box is too big to keep the center, shrink (don't slide)
+        # If requested box would spill, shrink uniformly (keeps center exact)
         if w > max_w or h > max_h:
             s = min(max_w / w, max_h / h)
-            w *= s
-            h *= s
+            w *= s; h *= s
 
-        x = center_x - w / 2.0
-        y = center_y - h / 2.0
+        x = cx - w / 2.0
+        y = cy - h / 2.0
 
-        # numeric guards
+        # Final tiny guards
         if x < 0.0: x = 0.0
         if y < 0.0: y = 0.0
         if x + w > 1.0: x = 1.0 - w
