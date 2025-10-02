@@ -106,8 +106,12 @@ def main():
 
     # --- Initialize Overlay Display ---
     overlay_display = OverlayDisplay(radius=20, tick_length=300, ring_thickness=1, tick_thickness=1, gap=-10, color=OVERLAY_COLOR)
-    overlay_display.set_style(scale_spacing=10, scale_major_every=5, scale_major_length=15, scale_minor_length=5, scale_label_show= False, scale_tick_thickness=1)
+    overlay_display.set_style(scale_spacing=10, scale_major_every=5, scale_major_length=15, scale_minor_length=5, scale_label_show=False, scale_tick_thickness=1)
     overlay_display.refresh()
+
+    # tell CameraSetup the actual display size so it can compute letterbox analytically
+    camera.set_display_size(overlay_display.disp_width, overlay_display.disp_height)
+
 
     side_bars = ContainerOverlay(bar_width=150, layer=2001, alpha=150)
     side_bars.show()
@@ -171,9 +175,8 @@ def main():
                     state_overlay.set_text(f"Zoom {zoom_Step}x" if zoom_Step > 1 else "LIVE")
                     buzzer_control.start_toggle(0.5, 1, 1)
 
-                    # NEW: zoom at reticle
                     nx, ny = overlay_display.reticle_norm_on_display()
-                    camera.center_zoom_step(zoom_Step, reticle_norm=(nx, ny))
+                    camera.center_zoom_step(zoom_Step, reticle_norm_display=(nx, ny))
 
                 # Zoom_Out
                 if button_right_down_pressed and not button_left_up_pressed and not button_ok_pressed:
@@ -181,9 +184,8 @@ def main():
                     state_overlay.set_text(f"Zoom {zoom_Step}x" if zoom_Step > 1 else "LIVE")
                     buzzer_control.start_toggle(0.5, 1, 1)
 
-                    # NEW: zoom at reticle
                     nx, ny = overlay_display.reticle_norm_on_display()
-                    camera.center_zoom_step(zoom_Step, reticle_norm=(nx, ny))
+                    camera.center_zoom_step(zoom_Step, reticle_norm_display=(nx, ny))
 
 
                 # GOTO RECORDING STATE
