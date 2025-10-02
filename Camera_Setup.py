@@ -98,13 +98,100 @@ class CameraSetup:
 
         # 2) Build ROI centered at (sx,sy) with DISPLAY aspect (prevents stretching)
         # roi = self._roi_exact_center_display_aspect(sx, sy, z)
-        roi = self._roi_exact_center_video_aspect(sx, sy, z) 
-        # 3) Apply zoom
+        # roi = self._roi_exact_center_video_aspect(sx, sy, z) 
+        roi = self._roi_for_zoom(sx, sy, z)
         self.camera.zoom = roi
 
         # 4) Project the SAME sensor point back to DISPLAY after crop/scale/orientation
         nx_after, ny_after = self._project_sensor_point_to_display_after_roi(sx, sy, roi)
         return nx_after, ny_after
+    
+    def _roi_exact_center_video_aspect_quantized(self, center_x, center_y, zoom):
+        """
+        Exact-centered (x,y,w,h) in SENSOR-normalized coords with:
+        - aspect = camera.resolution (video stream)
+        - sizes quantized to even pixels (avoid MMAL rounding/stretch)
+        - if near edges, shrink (don't slide) to keep center exact
+        """
+        # --- inputs clamped ---
+        cx = float(center_x); cy = float(center_y)
+        cx = 0.0 if cx < 0.0 else (1.0 if cx > 1.0 else cx)
+        cy = 0.0 if cy < 0.0 else (1.0 if cy > 1.0 else cy)
+
+        rw, rh = self.camera.resolution  # stream (e.g. 1280x720)
+        rw = int(rw); rh = int(rh)
+        ar = (rw / float(rh)) if rh else (16.0/9.0)
+
+        Z = max(1.0, float(zoom))
+
+        # --- target size in OUTPUT pixels (quantize to even) ---
+        # start from ideal sizes
+        h_pix = rh / Z
+        w_pix = h_pix * ar
+
+        # quantize to even pixels to satisfy chroma subsampling & GPU alignments
+        def even(i): 
+            i = int(round(i))
+            return i if (i % 2 == 0) else (i-1 if i>1 else 2)
+
+        h_pix = max(2, even(h_pix))
+        w_pix = max(2, even(w_pix))
+
+        # maximum centered box that fits at (cx,cy) in pixel units (keep 16:9)
+        max_w_all = 2.0 * min(cx*rw, (1.0-cx)*rw)
+        max_h_all = 2.0 * min(cy*rh, (1.0-cy)*rh)
+        max_w_from_h = max_h_all * ar
+
+        if max_w_all > max_w_from_h:
+            max_w_pix = int(max_w_from_h)
+            max_h_pix = int(max_h_all)
+        else:
+            max_w_pix = int(max_w_all)
+            max_h_pix = int(max_w_all / ar)
+
+        # quantize maxima to even too
+        max_w_pix = max(2, max_w_pix - (max_w_pix % 2))
+        max_h_pix = max(2, max_h_pix - (max_h_pix % 2))
+
+        # shrink uniformly if needed to fit
+        if w_pix > max_w_pix or h_pix > max_h_pix:
+            s = min(max_w_pix / float(w_pix), max_h_pix / float(h_pix))
+            w_pix = max(2, even(w_pix * s))
+            h_pix = max(2, even(h_pix * s))
+
+        # convert size back to normalized
+        w = w_pix / float(rw)
+        h = h_pix / float(rh)
+
+        # keep exact center by recomputing x,y from center (don’t slide)
+        x = cx - w/2.0
+        y = cy - h/2.0
+
+        # if any tiny spill from rounding, shave size (don’t move center)
+        if x < 0.0:
+            spill = -x
+            w -= 2*spill
+            x = 0.0
+        if y < 0.0:
+            spill = -y
+            h -= 2*spill
+            y = 0.0
+        if x + w > 1.0:
+            spill = (x + w) - 1.0
+            w -= 2*spill
+        if y + h > 1.0:
+            spill = (y + h) - 1.0
+            h -= 2*spill
+
+        # final clamps
+        if w < 0.0: w = 0.0
+        if h < 0.0: h = 0.0
+        return (x, y, w, h)
+
+    def _roi_for_zoom(self, sx, sy, z):
+        """Wrapper to choose the quantized, video-aspect ROI."""
+        return self._roi_exact_center_video_aspect_quantized(sx, sy, z)
+
 
     # ---------- Mapping helpers ----------
     def _display_to_sensor_forward(self, nx, ny):
