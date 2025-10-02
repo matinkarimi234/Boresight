@@ -93,25 +93,26 @@ def main():
     # --- Initialize Button Control ---
     button_control = ButtonControl(lambda flag: buttons_state_update_callback(flag))
 
-    # -------------------------------------------------------------------
-
     # Initialize state machine
     state_machine = StateMachine()
 
     # --- Initialize Camera Setup ---
     camera = CameraSetup()
-    camera.start_preview()  # Start the camera preview
-
-    # Create overlays
 
     # --- Initialize Overlay Display ---
     overlay_display = OverlayDisplay(radius=20, tick_length=300, ring_thickness=1, tick_thickness=1, gap=-10, color=OVERLAY_COLOR)
     overlay_display.set_style(scale_spacing=10, scale_major_every=5, scale_major_length=15, scale_minor_length=5, scale_label_show=False, scale_tick_thickness=1)
     overlay_display.refresh()
 
+    # Tell CameraSetup the REAL display aspect (not just camera.resolution)
     camera.set_display_aspect(overlay_display.disp_width, overlay_display.disp_height)  # 1280x720 → 16:9
-    
 
+    # Put the preview in the exact window to avoid any aspect distortion
+    camera.camera.start_preview(fullscreen=False,
+                                window=(0, 0, overlay_display.disp_width, overlay_display.disp_height))
+
+    # If left/right feels reversed on your rig, 'inverse' fixes it. Use 'forward' otherwise.
+    camera.set_mapping_mode('inverse')
 
     side_bars = ContainerOverlay(bar_width=150, layer=2001, alpha=150)
     side_bars.show()
@@ -131,28 +132,38 @@ def main():
                         color= OVERLAY_COLOR,
                         offset=20)
     
-
     static_png = StaticPNGOverlay("Pictures/Farand_Logo.png", layer=2004,
-                              pos=('left','top'),  # or numbers like (50, 30)
+                              pos=('left','top'),
                               scale=0.35,
-                              offset=20)                # or (width, height)
-    static_png.show()  # draws once and done
-
+                              offset=20)
+    static_png.show()
 
     record_manager = RecordingManager(base_dir="/home/boresight/Saved_Videos")
 
-    camera.set_mapping_mode('inverse')
+    # ---- Zoom/reticle behavior state ----
+    prezoom_reticle_px = None   # (x_px, y_px) saved when going from 1x -> >1x
+    current_zoom = 1
 
+    def center_overlay_reticle():
+        overlay_display.center_on_screen(refresh=True)
+
+    def restore_overlay_reticle():
+        nonlocal prezoom_reticle_px
+        if prezoom_reticle_px is not None:
+            x_px, y_px = prezoom_reticle_px
+            overlay_display.set_center(x_px, y_px, refresh=True)
+        prezoom_reticle_px = None
 
     def state_machine_thread():
         global ok_button_press_duration, button_left_up_pressed, button_right_down_pressed, arrow_buttons_press_duration, exit_buttons_press_duration
         global zoom_Step, button_ok_pressed
-        nonlocal_rec_started = False  # optional guard
-        reticle_STEP = 1  # pixels per tick; tweak as you like
+        nonlocal prezoom_reticle_px, current_zoom
+
+        reticle_STEP = 1  # pixels per tick
 
         while state_machine.running:
             current_state = state_machine.get_state()
-            tick = 0.125  # default tick (slower when not adjusting)
+            tick = 0.125  # default tick
 
             if current_state == StateMachineEnum.START_UP_STATE:
                 buzzer_control.start_toggle(0.25, 0.25, 1)
@@ -161,43 +172,52 @@ def main():
                 state_overlay.set_text("LIVE")
 
             elif current_state == StateMachineEnum.NORMAL_STATE:
-                # GOTO Adjustment State
-                if ok_button_press_duration >= 3 and exit_buttons_press_duration == 0:  # long-press OK to enter H adjust
+                # Enter H adjust
+                if ok_button_press_duration >= 3 and exit_buttons_press_duration == 0:
                     ok_button_press_duration = 0
                     buzzer_control.start_toggle(0.5, 1, 1)
                     state_machine.change_state(StateMachineEnum.HORIZONTAL_ADJUSTMENT)
                     state_overlay.set_text("H ADJ.")
                     led_control.start_toggle(0.5, 0.5)
 
-                # Zoom_In
+                # ---- Zoom In ----
                 if button_left_up_pressed and not button_right_down_pressed and not button_ok_pressed:
-                    zoom_Step = min(8, zoom_Step + 1)
-                    state_overlay.set_text(f"Zoom {zoom_Step}x" if zoom_Step > 1 else "LIVE")
+                    # save original reticle position when leaving 1x
+                    if current_zoom == 1:
+                        prezoom_reticle_px = overlay_display.get_center()
+
+                    zoom_Step = min(8, current_zoom + 1)
+                    current_zoom = zoom_Step
+
+                    state_overlay.set_text(f"Zoom {current_zoom}x" if current_zoom > 1 else "LIVE")
                     buzzer_control.start_toggle(0.5, 1, 1)
 
+                    # Center ROI on the world point under the reticle
                     nx0, ny0 = overlay_display.reticle_norm_on_display()
-                    nx1, ny1 = camera.center_zoom_step(zoom_Step, reticle_norm_display=(nx0, ny0))
+                    camera.center_zoom_step(current_zoom, reticle_norm_display=(nx0, ny0))
 
-                    # convert display-normalized (nx1,ny1) to overlay pixel coords and set
-                    x_px = int(nx1 * overlay_display.disp_width)  - overlay_display.offset_x
-                    y_px = int(ny1 * overlay_display.disp_height) - overlay_display.offset_y
-                    overlay_display.set_center(x_px, y_px, refresh=True)
+                    # Snap overlay reticle to SCREEN CENTER (so it sits on that same target)
+                    center_overlay_reticle()
 
-                # Zoom_Out
+                # ---- Zoom Out ----
                 if button_right_down_pressed and not button_left_up_pressed and not button_ok_pressed:
-                    zoom_Step = max(1, zoom_Step - 1)
-                    state_overlay.set_text(f"Zoom {zoom_Step}x" if zoom_Step > 1 else "LIVE")
+                    zoom_Step = max(1, current_zoom - 1)
+                    current_zoom = zoom_Step
+
+                    state_overlay.set_text(f"Zoom {current_zoom}x" if current_zoom > 1 else "LIVE")
                     buzzer_control.start_toggle(0.5, 1, 1)
 
-                    nx0, ny0 = overlay_display.reticle_norm_on_display()
-                    nx1, ny1 = camera.center_zoom_step(zoom_Step, reticle_norm_display=(nx0, ny0))
+                    if current_zoom > 1:
+                        # Keep centering ROI on the SAME point (current reticle pos before we move it)
+                        nx0, ny0 = overlay_display.reticle_norm_on_display()
+                        camera.center_zoom_step(current_zoom, reticle_norm_display=(nx0, ny0))
+                        center_overlay_reticle()
+                    else:
+                        # Back to 1x: full frame and restore the original reticle position
+                        camera.center_zoom_step(1.0, reticle_norm_display=None)
+                        restore_overlay_reticle()
 
-                    x_px = int(nx1 * overlay_display.disp_width)  - overlay_display.offset_x
-                    y_px = int(ny1 * overlay_display.disp_height) - overlay_display.offset_y
-                    overlay_display.set_center(x_px, y_px, refresh=True)
-
-
-                # GOTO RECORDING STATE  
+                # GOTO RECORDING STATE
                 if arrow_buttons_press_duration >= 3:
                     arrow_buttons_press_duration = 0
                     buzzer_control.start_toggle(0.5, 1, 1)
@@ -210,12 +230,9 @@ def main():
                     exit_buttons_press_duration = 0
                     buzzer_control.start_toggle(1, 1, 2)
                     time.sleep(5)
-                    os._exit(0)  # hard exit, avoids thread issues
-
-
+                    os._exit(0)
 
             elif current_state == StateMachineEnum.RECORD_STATE:
-                # START recording + metadata on first entry
                 if not record_manager.active:
                     record_manager.start(
                         camera=camera.camera,
@@ -225,64 +242,42 @@ def main():
                     print("Recording to:", record_manager.video_path)
                     print("Metadata to  :", record_manager.meta_path)
 
-
                 if ok_button_press_duration > 0:
                     ok_button_press_duration = 0
                     buzzer_control.start_toggle(0.25, 1, 1)
                     led_control.stop()
 
-                    
-
                     state_overlay.set_text("SAVING...")
-                    # STOP recording + metadata
                     record_manager.stop(camera.camera)
                     print("Saved:", record_manager.video_path)
                     print("Sidecar:", record_manager.meta_path)
 
                     state_machine.change_state(StateMachineEnum.SAVING_VIDEO_STATE)
 
-
-                    
-
             elif current_state == StateMachineEnum.HORIZONTAL_ADJUSTMENT:
-                # Move vertical line left/right
                 if button_left_up_pressed:
                     overlay_display.nudge_vertical(-reticle_STEP)   # left
                 if button_right_down_pressed:
                     overlay_display.nudge_vertical(+reticle_STEP)   # right
-
-                # faster loop in adjust mode
                 tick = 0.02
-
-                # short-press OK to switch to vertical adjust
                 if ok_button_press_duration > 0:
                     ok_button_press_duration = 0
                     buzzer_control.start_toggle(0.25, 1, 1)
                     state_overlay.set_text("V ADJ.")
                     state_machine.change_state(StateMachineEnum.VERTICAL_ADJUSTMENT)
 
-
-
             elif current_state == StateMachineEnum.VERTICAL_ADJUSTMENT:
-                # Move horizontal line up/down
                 if button_left_up_pressed:
                     overlay_display.nudge_horizontal(-reticle_STEP)  # up
                 if button_right_down_pressed:
                     overlay_display.nudge_horizontal(+reticle_STEP)  # down
-
-                # faster loop in adjust mode
                 tick = 0.02
-
-                # short-press OK to exit to normal
                 if ok_button_press_duration > 0:
                     ok_button_press_duration = 0
                     led_control.stop()
                     buzzer_control.start_toggle(0.5, 1, 1)
                     state_overlay.set_text("LIVE")
                     state_machine.change_state(StateMachineEnum.NORMAL_STATE)
-
-
-
 
             elif current_state == StateMachineEnum.SAVING_VIDEO_STATE:
                 if record_manager.active == False:
@@ -291,20 +286,17 @@ def main():
 
             time.sleep(tick)
 
-
     # Start the state machine thread
     threading.Thread(target=state_machine_thread, daemon=True).start()
 
-    # replace the infinite main loop with this low-CPU version ---
+    # Low-CPU main loop
     last_save_time = time.time()
     last_sec = None
     try:
         while True:
-            # Sleep a short time so main loop is responsive but not busy.
-            # We keep this loop independent from the state machine thread.
             time.sleep(0.05)
 
-            # Clock updates only when the second changes (once per second)
+            # Clock update once per second
             now = time.strftime("%H:%M:%S")
             if now != last_sec:
                 last_sec = now
@@ -319,7 +311,6 @@ def main():
         print("Exiting...")
     finally:
         overlay_display.save_offset()
-        
         camera.stop_preview()
 
         if record_manager.active:

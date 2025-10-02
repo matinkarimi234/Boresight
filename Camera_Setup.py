@@ -41,9 +41,9 @@ class CameraSetup:
         self._display_aspect = None
 
     # ---------- Public API ----------
-    def start_preview(self, fullscreen=True):
-        self.camera.start_preview(fullscreen=fullscreen)
-        time.sleep(0.2)
+    # def start_preview(self, fullscreen=True):
+    #     self.camera.start_preview(fullscreen=fullscreen)
+    #     time.sleep(0.2)
 
     def stop_preview(self):
         self.camera.stop_preview()
