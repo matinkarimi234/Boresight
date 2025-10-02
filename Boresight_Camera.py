@@ -7,6 +7,7 @@ from Alarm import BuzzerControl, LEDControl
 import time
 from Record_Manager import MetadataRecorder,RecordingManager
 import os
+import sys
 
 OVERLAY_COLOR = (180, 0, 0, 255)
 
@@ -82,39 +83,58 @@ def buttons_state_update_callback(flag):
 
 
 
-
-
-
-
 def main():
     led_control = LEDControl(23)
     buzzer_control = BuzzerControl(12)
     global prezoom_reticle_px
 
+    print("[boot] starting...", flush=True)
+
     # --- Initialize Button Control ---
     button_control = ButtonControl(lambda flag: buttons_state_update_callback(flag))
+    print("[boot] buttons ok", flush=True)
 
     # Initialize state machine
     state_machine = StateMachine()
+    # 🔧 ensure it actually runs
+    if not getattr(state_machine, "running", True):
+        try:
+            state_machine.start()       # if your class has start()
+            print("[boot] state_machine.start()", flush=True)
+        except AttributeError:
+            state_machine.running = True
+            print("[boot] state_machine.running=True", flush=True)
 
     # --- Initialize Camera Setup ---
     camera = CameraSetup()
+    camera.camera.zoom = (0.0, 0.0, 1.0, 1.0)  # reset zoom
 
     # --- Initialize Overlay Display ---
     overlay_display = OverlayDisplay(radius=20, tick_length=300, ring_thickness=1, tick_thickness=1, gap=-10, color=OVERLAY_COLOR)
     overlay_display.set_style(scale_spacing=10, scale_major_every=5, scale_major_length=15, scale_minor_length=5, scale_label_show=False, scale_tick_thickness=1)
     overlay_display.refresh()
+    print(f"[boot] disp={overlay_display.disp_width}x{overlay_display.disp_height}", flush=True)
 
     # Tell CameraSetup the REAL display aspect (not just camera.resolution)
-    camera.set_display_aspect(overlay_display.disp_width, overlay_display.disp_height)  # 1280x720 → 16:9
+    camera.set_display_aspect(overlay_display.disp_width, overlay_display.disp_height)
 
-    # Put the preview in the exact window to avoid any aspect distortion
-    camera.camera.start_preview(fullscreen=False,
-                                window=(0, 0, overlay_display.disp_width, overlay_display.disp_height))
+    # 🔧 Start preview with robust fallback
+    try:
+        camera.start_preview(fullscreen=False, window=(0, 0, overlay_display.disp_width, overlay_display.disp_height))
+        print("[boot] preview started (windowed)", flush=True)
+    except Exception as e:
+        print(f"[boot] windowed preview failed: {e}", flush=True)
+        camera.stop_preview()  # in case of half-initialized
+        camera = CameraSetup() # re-init camera cleanly
+        camera.set_display_aspect(overlay_display.disp_width, overlay_display.disp_height)
+        camera.start_preview(fullscreen=True)
+        print("[boot] preview started (fullscreen fallback)", flush=True)
 
     # If left/right feels reversed on your rig, 'inverse' fixes it. Use 'forward' otherwise.
     camera.set_mapping_mode('inverse')
 
+    # 🔧 Make sure overlays are transparent where there’s no drawing
+    # (OverlayDisplay already draws with alpha=0 background; ContainerOverlay below uses semi-alpha)
     side_bars = ContainerOverlay(bar_width=150, layer=2001, alpha=150)
     side_bars.show()
 
@@ -145,9 +165,7 @@ def main():
     prezoom_reticle_px = None   # (x_px, y_px) saved when going from 1x -> >1x
     current_zoom = 1
 
-    print("disp:", overlay_display.disp_width, overlay_display.disp_height)
-    print("cam :", camera.camera.resolution)
-
+    print(f"[boot] cam={camera.camera.resolution}", flush=True)
 
     def center_overlay_reticle():
         overlay_display.center_on_screen(refresh=True)
@@ -166,8 +184,9 @@ def main():
         nonlocal current_zoom
 
         reticle_STEP = 1  # pixels per tick
+        print("[thread] state machine loop entered", flush=True)
 
-        while state_machine.running:
+        while getattr(state_machine, "running", True):
             current_state = state_machine.get_state()
             tick = 0.125  # default tick
 
@@ -176,6 +195,7 @@ def main():
                 buzzer_control.start_toggle(0.1, 0.1, 2)
                 state_machine.change_state(StateMachineEnum.NORMAL_STATE)
                 state_overlay.set_text("LIVE")
+                print("[thread] -> NORMAL_STATE", flush=True)
 
             elif current_state == StateMachineEnum.NORMAL_STATE:
                 # Enter H adjust
@@ -185,6 +205,7 @@ def main():
                     state_machine.change_state(StateMachineEnum.HORIZONTAL_ADJUSTMENT)
                     state_overlay.set_text("H ADJ.")
                     led_control.start_toggle(0.5, 0.5)
+                    print("[thread] -> HORIZONTAL_ADJUSTMENT", flush=True)
 
                 # ---- Zoom In ----
                 if button_left_up_pressed and not button_right_down_pressed and not button_ok_pressed:
@@ -195,14 +216,10 @@ def main():
                     state_overlay.set_text(f"Zoom {current_zoom}x" if current_zoom > 1 else "LIVE")
                     buzzer_control.start_toggle(0.5, 1, 1)
 
-                    # 1) where is the reticle now (display-normalized)?
                     nx0, ny0 = overlay_display.reticle_norm_on_display()
-
-                    # 2) center the ROI on that world point
                     camera.center_zoom_step(current_zoom, reticle_norm_display=(nx0, ny0))
-
-                    # 3) snap overlay reticle to exact screen center (avoid rounding drift)
                     center_overlay_reticle()
+                    print(f"[zoom] in -> {current_zoom}x at ({nx0:.3f},{ny0:.3f})", flush=True)
 
                 # ---- Zoom Out ----
                 if button_right_down_pressed and not button_left_up_pressed and not button_ok_pressed:
@@ -211,14 +228,14 @@ def main():
                     buzzer_control.start_toggle(0.5, 1, 1)
 
                     if current_zoom > 1:
-                        # keep centering ROI on the same world point under current reticle
                         nx0, ny0 = overlay_display.reticle_norm_on_display()
                         camera.center_zoom_step(current_zoom, reticle_norm_display=(nx0, ny0))
                         center_overlay_reticle()
+                        print(f"[zoom] out -> {current_zoom}x at ({nx0:.3f},{ny0:.3f})", flush=True)
                     else:
-                        # back to 1x: full frame + restore original reticle position
                         camera.center_zoom_step(1.0, reticle_norm_display=None)
                         restore_overlay_reticle()
+                        print("[zoom] back to 1x; reticle restored", flush=True)
 
                 # GOTO RECORDING STATE
                 if arrow_buttons_press_duration >= 3:
@@ -227,12 +244,14 @@ def main():
                     state_machine.change_state(StateMachineEnum.RECORD_STATE)
                     state_overlay.set_text("REC.")
                     led_control.start_toggle(0.5, 0.5)
+                    print("[thread] -> RECORD_STATE", flush=True)
 
                 # Exiting
                 if exit_buttons_press_duration >= 3:
                     exit_buttons_press_duration = 0
                     buzzer_control.start_toggle(1, 1, 2)
-                    time.sleep(5)
+                    time.sleep(0.5)
+                    print("[thread] exit requested", flush=True)
                     os._exit(0)
 
             elif current_state == StateMachineEnum.RECORD_STATE:
@@ -242,8 +261,8 @@ def main():
                         overlay_display=overlay_display,
                         state_text_fn=lambda: (state_overlay.last_text or "")
                     )
-                    print("Recording to:", record_manager.video_path)
-                    print("Metadata to  :", record_manager.meta_path)
+                    print("Recording to:", record_manager.video_path, flush=True)
+                    print("Metadata to  :", record_manager.meta_path, flush=True)
 
                 if ok_button_press_duration > 0:
                     ok_button_press_duration = 0
@@ -252,28 +271,30 @@ def main():
 
                     state_overlay.set_text("SAVING...")
                     record_manager.stop(camera.camera)
-                    print("Saved:", record_manager.video_path)
-                    print("Sidecar:", record_manager.meta_path)
+                    print("Saved:", record_manager.video_path, flush=True)
+                    print("Sidecar:", record_manager.meta_path, flush=True)
 
                     state_machine.change_state(StateMachineEnum.SAVING_VIDEO_STATE)
+                    print("[thread] -> SAVING_VIDEO_STATE", flush=True)
 
             elif current_state == StateMachineEnum.HORIZONTAL_ADJUSTMENT:
                 if button_left_up_pressed:
-                    overlay_display.nudge_vertical(-reticle_STEP)   # left
+                    overlay_display.nudge_vertical(-reticle_STEP)
                 if button_right_down_pressed:
-                    overlay_display.nudge_vertical(+reticle_STEP)   # right
+                    overlay_display.nudge_vertical(+reticle_STEP)
                 tick = 0.02
                 if ok_button_press_duration > 0:
                     ok_button_press_duration = 0
                     buzzer_control.start_toggle(0.25, 1, 1)
                     state_overlay.set_text("V ADJ.")
                     state_machine.change_state(StateMachineEnum.VERTICAL_ADJUSTMENT)
+                    print("[thread] -> VERTICAL_ADJUSTMENT", flush=True)
 
             elif current_state == StateMachineEnum.VERTICAL_ADJUSTMENT:
                 if button_left_up_pressed:
-                    overlay_display.nudge_horizontal(-reticle_STEP)  # up
+                    overlay_display.nudge_horizontal(-reticle_STEP)
                 if button_right_down_pressed:
-                    overlay_display.nudge_horizontal(+reticle_STEP)  # down
+                    overlay_display.nudge_horizontal(+reticle_STEP)
                 tick = 0.02
                 if ok_button_press_duration > 0:
                     ok_button_press_duration = 0
@@ -281,18 +302,22 @@ def main():
                     buzzer_control.start_toggle(0.5, 1, 1)
                     state_overlay.set_text("LIVE")
                     state_machine.change_state(StateMachineEnum.NORMAL_STATE)
+                    print("[thread] -> NORMAL_STATE", flush=True)
 
             elif current_state == StateMachineEnum.SAVING_VIDEO_STATE:
                 if record_manager.active == False:
                     state_machine.change_state(StateMachineEnum.NORMAL_STATE)
                     state_overlay.set_text("LIVE")
+                    print("[thread] saving done -> NORMAL_STATE", flush=True)
 
             time.sleep(tick)
 
     # Start the state machine thread
-    threading.Thread(target=state_machine_thread, daemon=True).start()
+    t = threading.Thread(target=state_machine_thread, daemon=True)
+    t.start()
+    print("[boot] state thread started", flush=True)
 
-    # Low-CPU main loop
+    # Low-CPU main loop (heartbeat)
     last_save_time = time.time()
     last_sec = None
     try:
@@ -304,33 +329,29 @@ def main():
             if now != last_sec:
                 last_sec = now
                 clock_overlay.set_text(now)
+                # heartbeat
+                # print(f"[hb] {now}", flush=True)
 
-            # Periodically save offset every 10 seconds
+            # Save offset every 10 seconds
             if time.time() - last_save_time >= 10:
                 overlay_display.save_offset()
                 last_save_time = time.time()
 
     except KeyboardInterrupt:
-        print("Exiting...")
+        print("Exiting...", flush=True)
     finally:
-        try: 
-            side_bars.hide()
-        except: 
-            pass
-        try:
-             static_png.hide()
-        except:
-            pass
-        # clear the reticle layer completely
+        try: side_bars.hide()
+        except: pass
+        try: static_png.hide()
+        except: pass
         try:
             overlay_display.disp.buffer[:] = 0
             overlay_display.disp.update()
-        except:
-            pass
-        
+        except: pass
         camera.stop_preview()
-
         state_machine.stop()
+        print("[exit] cleaned up", flush=True)
+
 
 if __name__ == '__main__':
     main()
