@@ -39,9 +39,6 @@ class CameraSetup:
         # Optional override: display aspect (w/h). If None, derive from resolution.
         self._display_aspect = None
 
-        # 180 deg rotation
-        self.camera.set_orientation(rotation=0, hflip=True, vflip=True)
-
     # ---------- Public API ----------
     def start_preview(self, fullscreen=True, **kw):
         self.camera.start_preview(fullscreen=fullscreen, **kw)

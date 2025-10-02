@@ -107,6 +107,7 @@ def main():
 
     # --- Initialize Camera Setup ---
     camera = CameraSetup()
+    camera.set_orientation(rotation=0, hflip=True, vflip=True)
     camera.camera.zoom = (0.0, 0.0, 1.0, 1.0)  # reset zoom
 
     # --- Initialize Overlay Display ---
