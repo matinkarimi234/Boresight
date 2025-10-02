@@ -388,7 +388,7 @@ class OverlayDisplay:
         # clamp for safety
         nx = 0.0 if nx < 0.0 else (1.0 if nx > 1.0 else nx)
         ny = 0.0 if ny < 0.0 else (1.0 if ny > 1.0 else ny)
-        return nx, ny
+        return 1.0 - nx, 1.0 - ny
 
 
 # ===================
