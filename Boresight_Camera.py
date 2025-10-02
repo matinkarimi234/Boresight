@@ -109,8 +109,6 @@ def main():
     overlay_display.set_style(scale_spacing=10, scale_major_every=5, scale_major_length=15, scale_minor_length=5, scale_label_show=False, scale_tick_thickness=1)
     overlay_display.refresh()
 
-    # tell CameraSetup the actual display size so it can compute letterbox analytically
-    camera.set_display_size(overlay_display.disp_width, overlay_display.disp_height)
 
 
     side_bars = ContainerOverlay(bar_width=150, layer=2001, alpha=150)
