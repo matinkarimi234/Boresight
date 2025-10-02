@@ -380,7 +380,7 @@ def main():
             dt  = datetime.datetime.now()
             # Clock update once per second
             now_time = dt.strftime("%H:%M:%S")
-            jdate_str = jdatetime.datetime.fromgregorian(dt).strftime('%Y/%m/%d')
+            jdate_str = jdatetime.datetime.fromgregorian(datetime = dt).strftime('%Y/%m/%d')
             if now_time != last_sec:
                 last_sec = now_time
                 clock_overlay.set_text(now_time)
