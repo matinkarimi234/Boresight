@@ -147,11 +147,12 @@ def main():
     print("disp:", overlay_display.disp_width, overlay_display.disp_height)
     print("cam :", camera.camera.resolution)
 
+
     def center_overlay_reticle():
         overlay_display.center_on_screen(refresh=True)
 
     def restore_overlay_reticle():
-        nonlocal prezoom_reticle_px
+        global prezoom_reticle_px
         if prezoom_reticle_px is not None:
             x_px, y_px = prezoom_reticle_px
             overlay_display.set_center(x_px, y_px, refresh=True)
@@ -185,38 +186,35 @@ def main():
 
                 # ---- Zoom In ----
                 if button_left_up_pressed and not button_right_down_pressed and not button_ok_pressed:
-                    # save original reticle position when leaving 1x
                     if current_zoom == 1:
                         prezoom_reticle_px = overlay_display.get_center()
 
-                    zoom_Step = min(8, current_zoom + 1)
-                    current_zoom = zoom_Step
-
+                    current_zoom = min(8, current_zoom + 1)
                     state_overlay.set_text(f"Zoom {current_zoom}x" if current_zoom > 1 else "LIVE")
                     buzzer_control.start_toggle(0.5, 1, 1)
 
-                    # Center ROI on the world point under the reticle
+                    # 1) where is the reticle now (display-normalized)?
                     nx0, ny0 = overlay_display.reticle_norm_on_display()
+
+                    # 2) center the ROI on that world point
                     camera.center_zoom_step(current_zoom, reticle_norm_display=(nx0, ny0))
 
-                    # Snap overlay reticle to SCREEN CENTER (so it sits on that same target)
+                    # 3) snap overlay reticle to exact screen center (avoid rounding drift)
                     center_overlay_reticle()
 
                 # ---- Zoom Out ----
                 if button_right_down_pressed and not button_left_up_pressed and not button_ok_pressed:
-                    zoom_Step = max(1, current_zoom - 1)
-                    current_zoom = zoom_Step
-
+                    current_zoom = max(1, current_zoom - 1)
                     state_overlay.set_text(f"Zoom {current_zoom}x" if current_zoom > 1 else "LIVE")
                     buzzer_control.start_toggle(0.5, 1, 1)
 
                     if current_zoom > 1:
-                        # Keep centering ROI on the SAME point (current reticle pos before we move it)
+                        # keep centering ROI on the same world point under current reticle
                         nx0, ny0 = overlay_display.reticle_norm_on_display()
                         camera.center_zoom_step(current_zoom, reticle_norm_display=(nx0, ny0))
                         center_overlay_reticle()
                     else:
-                        # Back to 1x: full frame and restore the original reticle position
+                        # back to 1x: full frame + restore original reticle position
                         camera.center_zoom_step(1.0, reticle_norm_display=None)
                         restore_overlay_reticle()
 
