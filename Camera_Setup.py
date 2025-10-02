@@ -80,9 +80,9 @@ class CameraSetup:
             nx, ny = float(reticle_norm_display[0]), float(reticle_norm_display[1])
 
         # 1) DISPLAY -> SENSOR (choose forward mapping; flip to inverse if your rig needs it)
-        sx, sy = self._display_to_sensor_forward(nx, ny)
+        # sx, sy = self._display_to_sensor_forward(nx, ny)
         # If forward doesn't land exactly on your reticle, swap to:
-        # sx, sy = self._display_to_sensor_inverse(nx, ny)
+        sx, sy = self._display_to_sensor_inverse(nx, ny)
 
         # 2) Build ROI centered at (sx,sy) with DISPLAY aspect (prevents stretching)
         roi = self._roi_exact_center_display_aspect(sx, sy, z)
