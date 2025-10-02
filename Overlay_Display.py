@@ -231,8 +231,8 @@ class OverlayDisplay:
         Return (nx, ny) in [0..1] relative to the full display, so we can map
         the reticle's pixel center (within the overlay bitmap) to the camera zoom.
         """
-        nx = (self.offset_x + self.vertical_x + 0.5) / float(self.disp_width)
-        ny = (self.offset_y + self.horizontal_y + 0.5) / float(self.disp_height)
+        nx = (self.offset_x + self.vertical_x) / float(self.disp_width)
+        ny = (self.offset_y + self.horizontal_y) / float(self.disp_height)
         # clamp for safety
         nx = max(0.0, min(1.0, nx))
         ny = max(0.0, min(1.0, ny))
