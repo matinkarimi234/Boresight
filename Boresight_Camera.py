@@ -89,6 +89,7 @@ def buttons_state_update_callback(flag):
 def main():
     led_control = LEDControl(23)
     buzzer_control = BuzzerControl(12)
+    global prezoom_reticle_px
 
     # --- Initialize Button Control ---
     button_control = ButtonControl(lambda flag: buttons_state_update_callback(flag))
@@ -161,7 +162,8 @@ def main():
     def state_machine_thread():
         global ok_button_press_duration, button_left_up_pressed, button_right_down_pressed, arrow_buttons_press_duration, exit_buttons_press_duration
         global zoom_Step, button_ok_pressed
-        nonlocal prezoom_reticle_px, current_zoom
+        global prezoom_reticle_px
+        nonlocal current_zoom
 
         reticle_STEP = 1  # pixels per tick
 
