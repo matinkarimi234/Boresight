@@ -118,6 +118,33 @@ class CameraSetup:
         # Apply zoom
         self.camera.zoom = roi
         return nx_after, ny_after
+    
+    def center_zoom_step_at_sensor(self, step: float, sensor_xy, max_step: float = 8.0):
+        """
+        Center zoom on a SENSOR-normalized point (sx, sy) directly.
+        Returns (nx_after, ny_after, roi) where nx/ny are display-normalized
+        projection of the same world point after applying the ROI.
+        """
+        try: z = float(step)
+        except: z = 1.0
+        if z < 1.0: z = 1.0
+        if z > float(max_step): z = float(max_step)
+
+        sx, sy = float(sensor_xy[0]), float(sensor_xy[1])
+        # clamp sensor point
+        sx = 0.0 if sx < 0.0 else (1.0 if sx > 1.0 else sx)
+        sy = 0.0 if sy < 0.0 else (1.0 if sy > 1.0 else sy)
+
+        if z <= 1.0001:
+            self.camera.zoom = (0.0, 0.0, 1.0, 1.0)
+            # at 1x projection is just sensor->display
+            nx, ny = self._sensor_to_display_inverse(sx, sy)
+            return nx, ny, (0.0, 0.0, 1.0, 1.0)
+
+        roi = self._roi_for_zoom(sx, sy, z)
+        self.camera.zoom = roi
+        nx_after, ny_after = self._project_sensor_point_to_display_after_roi(sx, sy, roi)
+        return nx_after, ny_after, roi
 
     # ---------- Quantized, video-aspect ROI ----------
     def _roi_exact_center_video_aspect_quantized(self, center_x, center_y, zoom):
