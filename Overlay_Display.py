@@ -1,18 +1,16 @@
-import numpy as np
-import json, os
-from dispmanx import DispmanX
-from PIL import Image, ImageDraw, ImageFont
-import threading
-import cv2 as cv
-
 import os
 import json
+import threading
+
 import numpy as np
 import cv2 as cv
+from PIL import Image, ImageDraw, ImageFont
+from dispmanx import DispmanX
 
-# Replace with your DispmanX wrapper import if different
-# from your_dispmanx_module import DispmanX
 
+# =========================
+# Overlay (reticle + scales)
+# =========================
 class OverlayDisplay:
     OFFSET_FILE = "~/Saved_Videos/overlay_offset.json"
     OVERLAY_COLOR = (180, 0, 0, 255)   # BGRA
@@ -60,17 +58,91 @@ class OverlayDisplay:
         self.offset_x = (self.disp_width  - W) // 2
         self.offset_y = (self.disp_height - H) // 2
 
-        # center coordinates (load saved offsets or default to center)
-        self.horizontal_y, self.vertical_x = self.load_offset()
+        # ---- center coordinates (new names) ----
+        # Load (with backward compatibility for legacy keys)
+        cy, cx = self._load_offset_compat()
+        self.center_x_px = int(cx)
+        self.center_y_px = int(cy)
         self._clamp_center_to_keep_circle_visible()
 
+    # --------- persistence (with migration) ----------
+    def _load_offset_compat(self):
+        """
+        Returns (center_y_px, center_x_px).
+        Supports legacy format {"horizontal_y": Y, "vertical_x": X}
+        and new format {"center_x_px": X, "center_y_px": Y}.
+        """
+        path = os.path.expanduser(self.OFFSET_FILE)
+        if os.path.exists(path):
+            try:
+                with open(path, "r") as f:
+                    d = json.load(f)
+
+                # New format preferred
+                if "center_x_px" in d and "center_y_px" in d:
+                    cx = int(d["center_x_px"])
+                    cy = int(d["center_y_px"])
+                    print("Loaded offset (new):", cx, cy)
+                    return cy, cx
+
+                # Legacy format: {"horizontal_y": Y, "vertical_x": X}
+                if "horizontal_y" in d and "vertical_x" in d:
+                    cy = int(d["horizontal_y"])
+                    cx = int(d["vertical_x"])
+                    print("Loaded offset (legacy):", cx, cy)
+                    return cy, cx
+
+                print("Offset file missing expected keys; using defaults.")
+            except Exception as e:
+                print("Error reading offset file, using defaults:", e)
+
+        # defaults: center of overlay bitmap
+        H = self.desired_res[1]
+        W = self.desired_res[0]
+        return H // 2, W // 2
+
+    def save_offset(self):
+        """Save in the new, unambiguous format."""
+        try:
+            path = os.path.expanduser(self.OFFSET_FILE)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
+                json.dump(
+                    {"center_x_px": int(self.center_x_px),
+                     "center_y_px": int(self.center_y_px)},
+                    f
+                )
+            print("Saved offset (new):", self.center_x_px, self.center_y_px)
+        except Exception as e:
+            print("Error saving offset:", e)
+
+    # -------------- geometry helpers --------------
     def _clamp_center_to_keep_circle_visible(self):
         W, H = self.desired_res
         r = self.radius
         # keep center such that entire circle remains on the overlay bitmap
-        self.vertical_x   = int(np.clip(self.vertical_x,   r, W - 1 - r))
-        self.horizontal_y = int(np.clip(self.horizontal_y, r, H - 1 - r))
+        self.center_x_px = int(np.clip(self.center_x_px, r, W - 1 - r))
+        self.center_y_px = int(np.clip(self.center_y_px, r, H - 1 - r))
 
+    # Public helpers (handy for UI logic)
+    def center_on_screen(self, refresh=True):
+        """Move reticle to exact overlay center (which sits at display center)."""
+        W, H = self.desired_res
+        self.center_x_px = W // 2
+        self.center_y_px = H // 2
+        if refresh:
+            self.refresh()
+
+    def set_center(self, cx_px, cy_px, refresh=True):
+        self.center_x_px = int(np.clip(cx_px, self.radius, self.desired_res[0] - 1 - self.radius))
+        self.center_y_px = int(np.clip(cy_px, self.radius, self.desired_res[1] - 1 - self.radius))
+        if refresh:
+            self.refresh()
+
+    def get_center(self):
+        return self.center_x_px, self.center_y_px
+
+    # -------------- drawing --------------
     def _draw_reticle(self, img_array, cx, cy):
         """
         Draw circle, outside ticks, graduated scales (outside-only), and numeric labels.
@@ -91,7 +163,7 @@ class OverlayDisplay:
         if r_pix > 0 and wt > 0:
             cv.circle(img_array, (cx, cy), r_pix, self.color, thickness=wt, lineType=cv.LINE_AA)
 
-        # --- Main outside ticks (existing behavior) ---
+        # --- Main outside ticks ---
         # Right
         cv.line(img_array, (cx + r_pix + g, cy), (cx + r_pix + g + L, cy), self.color, thickness=w, lineType=cv.LINE_AA)
         # Left
@@ -120,9 +192,8 @@ class OverlayDisplay:
         units = str(self.scale_label_units)
 
         def draw_label(text, pos_x, pos_y, align='center'):
-            (tw, th), baseline = cv.getTextSize(text, label_font, label_scale, label_thickness)
-            x = int(pos_x)
-            y = int(pos_y)
+            (tw, th), _ = cv.getTextSize(text, label_font, label_scale, label_thickness)
+            x = int(pos_x); y = int(pos_y)
             if align == 'center':
                 x = int(x - tw // 2)
                 y = int(y + th // 2)
@@ -133,128 +204,107 @@ class OverlayDisplay:
             y = max(th, min(H - 1, y))
             cv.putText(img_array, text, (x, y), label_font, label_scale, self.color, label_thickness, lineType=cv.LINE_AA)
 
-        # Horizontal ticks: start at center and go right and left
-        # Right (including center as i=0, but skip drawing a tick at center because we already draw the center dot)
-        i = 0
-        x = cx
+        # Horizontal ticks: right
+        i = 0; x = cx
         while x < W:
             is_center = (i == 0)
             is_major = (i % major_every) == 0
             length = major_len if is_major else minor_len
-
             if not is_center:
                 y0 = int(np.clip(cy - (length // 2), 0, H - 1))
                 y1 = int(np.clip(cy + (length // 2), 0, H - 1))
                 cv.line(img_array, (x, y0), (x, y1), self.color, thickness=tick_w, lineType=cv.LINE_AA)
-
                 if is_major and show_labels:
                     dist = x - cx
                     txt = f"+{dist}{units}"
                     label_x = x
                     label_y = cy + (length // 2) + label_offset + int(label_scale * 10)
                     draw_label(txt, label_x, label_y, align='center')
-            i += 1
-            x += spacing
+            i += 1; x += spacing
 
-        # Left
-        i = 0
-        x = cx
+        # Horizontal ticks: left
+        i = 0; x = cx
         while x >= 0:
             is_center = (i == 0)
             is_major = (i % major_every) == 0
             length = major_len if is_major else minor_len
-
             if not is_center:
                 y0 = int(np.clip(cy - (length // 2), 0, H - 1))
                 y1 = int(np.clip(cy + (length // 2), 0, H - 1))
                 cv.line(img_array, (x, y0), (x, y1), self.color, thickness=tick_w, lineType=cv.LINE_AA)
-
                 if is_major and show_labels:
                     dist = cx - x
                     txt = f"-{dist}{units}"
                     label_x = x
                     label_y = cy + (length // 2) + label_offset + int(label_scale * 10)
                     draw_label(txt, label_x, label_y, align='center')
-            i += 1
-            x -= spacing
+            i += 1; x -= spacing
 
-        # Vertical ticks: start at center and go down and up
-        # Down
-        i = 0
-        y = cy
+        # Vertical ticks: down
+        i = 0; y = cy
         while y < H:
             is_center = (i == 0)
             is_major = (i % major_every) == 0
             length = major_len if is_major else minor_len
-
             if not is_center:
                 x0 = int(np.clip(cx - (length // 2), 0, W - 1))
                 x1 = int(np.clip(cx + (length // 2), 0, W - 1))
                 cv.line(img_array, (x0, y), (x1, y), self.color, thickness=tick_w, lineType=cv.LINE_AA)
-
                 if is_major and show_labels:
                     dist = y - cy
                     txt = f"+{dist}{units}"
                     label_x = cx + (length // 2) + label_offset + int(label_scale * 6)
                     label_y = y
                     draw_label(txt, label_x, label_y, align='left')
-            i += 1
-            y += spacing
+            i += 1; y += spacing
 
-        # Up
-        i = 0
-        y = cy
+        # Vertical ticks: up
+        i = 0; y = cy
         while y >= 0:
             is_center = (i == 0)
             is_major = (i % major_every) == 0
             length = major_len if is_major else minor_len
-
             if not is_center:
                 x0 = int(np.clip(cx - (length // 2), 0, W - 1))
                 x1 = int(np.clip(cx + (length // 2), 0, W - 1))
                 cv.line(img_array, (x0, y), (x1, y), self.color, thickness=tick_w, lineType=cv.LINE_AA)
-
                 if is_major and show_labels:
                     dist = cy - y
                     txt = f"-{dist}{units}"
                     label_x = cx + (length // 2) + label_offset + int(label_scale * 6)
                     label_y = y
                     draw_label(txt, label_x, label_y, align='left')
-            i += 1
-            y -= spacing
+            i += 1; y -= spacing
 
         return img_array
-    
 
-    def reticle_norm_on_display(self):
+    def update_overlay_image(self, horizontal_y=None, vertical_x=None, *,
+                             center_y_px=None, center_x_px=None):
         """
-        Return (nx, ny) in [0..1] relative to the full display, so we can map
-        the reticle's pixel center (within the overlay bitmap) to the camera zoom.
+        Keep backward compatibility with old params (horizontal_y, vertical_x),
+        while preferring explicit (center_y_px, center_x_px).
         """
-        nx = (self.offset_x + self.vertical_x) / float(self.disp_width)
-        ny = (self.offset_y + self.horizontal_y) / float(self.disp_height)
-        # clamp for safety
-        nx = max(0.0, min(1.0, nx))
-        ny = max(0.0, min(1.0, ny))
-        return nx, ny
-    
+        if center_y_px is not None:
+            self.center_y_px = int(center_y_px)
+        elif horizontal_y is not None:
+            self.center_y_px = int(horizontal_y)
 
-    def update_overlay_image(self, horizontal_y=None, vertical_x=None):
-        if horizontal_y is not None:
-            self.horizontal_y = int(horizontal_y)
-        if vertical_x is not None:
-            self.vertical_x = int(vertical_x)
+        if center_x_px is not None:
+            self.center_x_px = int(center_x_px)
+        elif vertical_x is not None:
+            self.center_x_px = int(vertical_x)
+
         self._clamp_center_to_keep_circle_visible()
 
         # clear & draw
         self.overlay_image[:] = 0
         self.overlay_image[:] = self._draw_reticle(
-            self.overlay_image, cx=self.vertical_x, cy=self.horizontal_y
+            self.overlay_image, cx=self.center_x_px, cy=self.center_y_px
         )
 
     def refresh(self):
         """Redraw reticle and push the centered bitmap to the display."""
-        self.update_overlay_image(self.horizontal_y, self.vertical_x)
+        self.update_overlay_image(self.center_y_px, self.center_x_px)
         y0, y1 = self.offset_y, self.offset_y + self.desired_res[1]
         x0, x1 = self.offset_x, self.offset_x + self.desired_res[0]
         self.disp.buffer[y0:y1, x0:x1, :] = self.overlay_image
@@ -263,72 +313,31 @@ class OverlayDisplay:
     # helpers to move the reticle center
     def nudge_vertical(self, dx):   # move center left/right
         W = self.desired_res[0]
-        self.vertical_x = int(np.clip(self.vertical_x + dx, self.radius, W - 1 - self.radius))
+        self.center_x_px = int(np.clip(self.center_x_px + dx, self.radius, W - 1 - self.radius))
         self.refresh()
 
     def nudge_horizontal(self, dy): # move center up/down
         H = self.desired_res[1]
-        self.horizontal_y = int(np.clip(self.horizontal_y + dy, self.radius, H - 1 - self.radius))
+        self.center_y_px = int(np.clip(self.center_y_px + dy, self.radius, H - 1 - self.radius))
         self.refresh()
 
-    def load_offset(self):
-        path = os.path.expanduser(self.OFFSET_FILE)
-        if os.path.exists(path):
-            try:
-                with open(path, "r") as f:
-                    d = json.load(f)
-                print("Loaded saved offset:", d.get("horizontal_y"), d.get("vertical_x"))
-                return d.get("horizontal_y", self.desired_res[1] // 2), d.get("vertical_x", self.desired_res[0] // 2)
-            except Exception as e:
-                print("Error reading offset file, using defaults:", e)
-        return self.desired_res[1] // 2, self.desired_res[0] // 2
-
-    def save_offset(self):
-        try:
-            path = os.path.expanduser(self.OFFSET_FILE)
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, "w") as f:
-                json.dump({"horizontal_y": self.horizontal_y, "vertical_x": self.vertical_x}, f)
-            print("Saved offset:", self.horizontal_y, self.vertical_x)
-        except Exception as e:
-            print("Error saving offset:", e)
-
-    def set_style(self, *, radius=None, ring_thickness=None,
-                  tick_length=None, tick_thickness=None, gap=None, color=None,
-                  # scale params:
-                  scale_spacing=None, scale_major_every=None,
-                  scale_minor_length=None, scale_major_length=None,
-                  scale_tick_thickness=None,
-                  scale_label_font_scale=None, scale_label_thickness=None,
-                  scale_label_offset=None, scale_label_show=None,
-                  scale_label_units=None):
-        """Change visual style and scale parameters live."""
-        if radius is not None: self.radius = int(radius)
-        if ring_thickness is not None: self.ring_thickness = int(ring_thickness)
-        if tick_length is not None: self.tick_length = int(tick_length)
-        if tick_thickness is not None:
-            self.tick_thickness = int(tick_thickness)
-            # keep scale tick thickness sensible
-            self.scale_tick_thickness = max(1, int(tick_thickness))
-        if gap is not None: self.gap = int(gap)
-        if color is not None: self.color = tuple(color)
-
-        # scale params
-        if scale_spacing is not None: self.scale_spacing = int(scale_spacing)
-        if scale_major_every is not None: self.scale_major_every = max(1, int(scale_major_every))
-        if scale_minor_length is not None: self.scale_minor_length = int(scale_minor_length)
-        if scale_major_length is not None: self.scale_major_length = int(scale_major_length)
-        if scale_tick_thickness is not None: self.scale_tick_thickness = int(scale_tick_thickness)
-        if scale_label_font_scale is not None: self.scale_label_font_scale = float(scale_label_font_scale)
-        if scale_label_thickness is not None: self.scale_label_thickness = int(scale_label_thickness)
-        if scale_label_offset is not None: self.scale_label_offset = int(scale_label_offset)
-        if scale_label_show is not None: self.scale_label_show = bool(scale_label_show)
-        if scale_label_units is not None: self.scale_label_units = str(scale_label_units)
-
-        self._clamp_center_to_keep_circle_visible()
-        self.refresh()
+    def reticle_norm_on_display(self):
+        """
+        Return (nx, ny) in [0..1] relative to the full display, so we can map
+        the reticle's pixel center (within the overlay bitmap) to the camera zoom.
+        NOTE: intentionally no +0.5 bias to avoid subpixel shift at high zoom.
+        """
+        nx = (self.offset_x + self.center_x_px) / float(self.disp_width)
+        ny = (self.offset_y + self.center_y_px) / float(self.disp_height)
+        # clamp for safety
+        nx = 0.0 if nx < 0.0 else (1.0 if nx > 1.0 else nx)
+        ny = 0.0 if ny < 0.0 else (1.0 if ny > 1.0 else ny)
+        return nx, ny
 
 
+# ===================
+# Static PNG overlay
+# ===================
 class StaticPNGOverlay:
     def __init__(self, png_path, layer=1999, pos=('left', 'top'), scale=None, offset=20):
         self.disp = DispmanX(pixel_format="RGBA", buffer_type="numpy", layer=layer)
@@ -342,12 +351,6 @@ class StaticPNGOverlay:
                 im = im.resize(scale, Image.LANCZOS)
             else:  # uniform scale factor
                 im = im.resize((int(im.width*scale), int(im.height*scale)), Image.LANCZOS)
-
-        # If you see halo artifacts, enable premultiplied alpha (commented out by default):
-        # arr = np.array(im, dtype=np.uint8)
-        # a = arr[...,3:4].astype(np.uint16)
-        # arr[...,0:3] = (arr[...,0:3].astype(np.uint16) * a // 255).astype(np.uint8)
-        # self.img = arr
 
         self.img = np.array(im, dtype=np.uint8)
         H, W, _ = self.img.shape
@@ -388,6 +391,10 @@ class StaticPNGOverlay:
         self.disp.buffer[:] = 0
         self.disp.update()
 
+
+# ===================
+# Text overlay (HUD)
+# ===================
 class TextOverlay:
     def __init__(self, layer, font_path, font_size,
                  pos=('left', 'top'),
@@ -534,9 +541,9 @@ class TextOverlay:
         self._stop_blink()
 
 
-import numpy as np
-from dispmanx import DispmanX
-
+# ===================
+# Mask / Matte overlay
+# ===================
 class ContainerOverlay:
     def __init__(self, inner_size=None, bar_width=None, layer=1996, alpha=128,
                  center=True, inner_pos=None):
@@ -596,4 +603,3 @@ class ContainerOverlay:
     def set_bar_width(self, w):
         self.bar_width = int(max(0, w))
         self.show()
-
