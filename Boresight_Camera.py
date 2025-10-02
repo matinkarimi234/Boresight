@@ -113,7 +113,7 @@ def main():
                                 window=(0, 0, overlay_display.disp_width, overlay_display.disp_height))
 
     # If left/right feels reversed on your rig, 'inverse' fixes it. Use 'forward' otherwise.
-    camera.set_mapping_mode('forward')
+    camera.set_mapping_mode('inverse')
 
     side_bars = ContainerOverlay(bar_width=150, layer=2001, alpha=150)
     side_bars.show()
