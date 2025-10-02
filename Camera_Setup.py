@@ -17,7 +17,7 @@ class CameraSetup:
 
     def __init__(self, resolution=(1280, 720), sensor_mode=5, iso=800, framerate=30,
                  exposure_mode='auto', awb_mode='auto',
-                 rotation=180, hflip=False, vflip=False,
+                 rotation=0, hflip=False, vflip=False,
                  mapping_mode='forward'):
         from picamera import PiCamera
         self.camera = PiCamera()
@@ -38,6 +38,9 @@ class CameraSetup:
 
         # Optional override: display aspect (w/h). If None, derive from resolution.
         self._display_aspect = None
+
+        # 180 deg rotation
+        self.camera.set_orientation(rotation=0, hflip=True, vflip=True)
 
     # ---------- Public API ----------
     def start_preview(self, fullscreen=True, **kw):
