@@ -9,7 +9,7 @@ class CameraSetup:
     aspect (e.g., 1280x720 monitor with a 16:9 camera mode).
     """
 
-    def __init__(self, resolution=(1640, 922), sensor_mode=5, iso=800, framerate=30,
+    def __init__(self, resolution=(1280, 720), sensor_mode=5, iso=800, framerate=30,
                  exposure_mode='auto', awb_mode='auto', rotation=180, hflip=False, vflip=False):
         from picamera import PiCamera
         self.camera = PiCamera()
