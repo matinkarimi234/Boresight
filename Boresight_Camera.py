@@ -28,20 +28,26 @@ button_ok_pressed = False
 
 arrow_buttons_press_start_time = None
 arrow_buttons_press_duration = 0
+arrow_buttons_hold_time = 0
+arrow_buttons_hold_handled = False
 
 exit_buttons_start_time = None
 exit_buttons_press_duration = 0
+exit_buttons_hold_time = 0
+exit_buttons_hold_handled = False
 
 zoom_Step = 1
 
 def buttons_state_update_callback(flag):
     global ok_button_press_duration, ok_button_press_start_time, button_left_up_pressed
     global button_right_down_pressed, arrow_buttons_press_start_time, arrow_buttons_press_duration
+    global arrow_buttons_hold_time, arrow_buttons_hold_handled
     global button_ok_pressed, exit_buttons_press_duration, exit_buttons_start_time
+    global exit_buttons_hold_time, exit_buttons_hold_handled
     global ok_button_hold_time, ok_button_hold_handled, ok_last_release_time
     global ok_double_tap_pending
     """Callback to receive flags from ButtonControl."""
-    
+
     if flag == ButtonControl.OK_PRESSED:
         button_ok_pressed = True;
         # Start a timer when the button is pressed
@@ -75,29 +81,36 @@ def buttons_state_update_callback(flag):
 
     elif flag == ButtonControl.LEFT_UP_BUTTON_RELEASED:
         button_left_up_pressed = False
-        
+
     elif flag == ButtonControl.RIGHT_DOWN_BUTTON_RELEASED:
         button_right_down_pressed = False
 
-
     if button_left_up_pressed and button_right_down_pressed:
-        arrow_buttons_press_start_time = time.time()
-
+        if arrow_buttons_press_start_time is None:
+            arrow_buttons_press_start_time = time.time()
+            arrow_buttons_press_duration = 0
+            arrow_buttons_hold_time = 0
+            arrow_buttons_hold_handled = False
     else:
-        if arrow_buttons_press_start_time:
+        if arrow_buttons_press_start_time is not None:
             arrow_buttons_press_duration = time.time() - arrow_buttons_press_start_time
-
-            arrow_buttons_press_start_time = None
+        arrow_buttons_press_start_time = None
+        arrow_buttons_hold_time = 0
+        arrow_buttons_hold_handled = False
 
 
     if button_left_up_pressed and button_ok_pressed:
-        exit_buttons_start_time = time.time()
-
+        if exit_buttons_start_time is None:
+            exit_buttons_start_time = time.time()
+            exit_buttons_press_duration = 0
+            exit_buttons_hold_time = 0
+            exit_buttons_hold_handled = False
     else:
-        if exit_buttons_start_time:
+        if exit_buttons_start_time is not None:
             exit_buttons_press_duration = time.time() - exit_buttons_start_time
-
-            exit_buttons_start_time = None
+        exit_buttons_start_time = None
+        exit_buttons_hold_time = 0
+        exit_buttons_hold_handled = False
 
 
 
@@ -162,15 +175,15 @@ def main():
                         pos=('left', 'bottom'),
                         color= OVERLAY_COLOR,
                         offset=20)
-    
+
     calender_overlay = TextOverlay(layer=2003,
                         font_path="Fonts/Tw_Cen_Condensed.ttf",
                         font_size=36,
                         pos=('right', 'bottom'),
                         color= OVERLAY_COLOR,
                         offset=20)
-    
-    
+
+
     state_overlay = TextOverlay(layer=2004,
                         font_path="Fonts/Tw_Cen_Condensed.ttf",
                         rec_color= OVERLAY_COLOR,
@@ -178,7 +191,7 @@ def main():
                         pos=('right', 'top'),
                         color= OVERLAY_COLOR,
                         offset=20)
-    
+
     static_png = StaticPNGOverlay("Pictures/Farand_Logo.png", layer=2005,
                               pos=('left','top'),
                               scale=0.35,
@@ -209,6 +222,9 @@ def main():
 
     def state_machine_thread():
         global ok_button_press_duration, button_left_up_pressed, button_right_down_pressed, arrow_buttons_press_duration, exit_buttons_press_duration
+        global arrow_buttons_press_start_time, exit_buttons_start_time
+        global arrow_buttons_hold_time, arrow_buttons_hold_handled
+        global exit_buttons_hold_time, exit_buttons_hold_handled
         global zoom_Step, button_ok_pressed
         global prezoom_reticle_px
         global current_zoom, zoom_anchor_sensor, zoom_anchor_dirty
@@ -223,6 +239,24 @@ def main():
                 ok_button_hold_time = time.time() - ok_button_press_start_time
             else:
                 ok_button_hold_time = 0
+
+            if (
+                button_left_up_pressed
+                and button_right_down_pressed
+                and arrow_buttons_press_start_time is not None
+            ):
+                arrow_buttons_hold_time = time.time() - arrow_buttons_press_start_time
+            else:
+                arrow_buttons_hold_time = 0
+
+            if (
+                button_left_up_pressed
+                and button_ok_pressed
+                and exit_buttons_start_time is not None
+            ):
+                exit_buttons_hold_time = time.time() - exit_buttons_start_time
+            else:
+                exit_buttons_hold_time = 0
 
             current_state = state_machine.get_state()
             tick = 0.125  # default tick
@@ -252,7 +286,7 @@ def main():
                 if (
                     ok_button_hold_time >= 3
                     and not ok_button_hold_handled
-                    and exit_buttons_press_duration == 0
+                    and exit_buttons_hold_time == 0
                 ):
                     ok_button_press_duration = 0
                     ok_button_hold_handled = True
@@ -341,8 +375,11 @@ def main():
                         prezoom_reticle_px = None
 
                 # GOTO RECORDING STATE
-                if arrow_buttons_press_duration >= 3:
+                if arrow_buttons_hold_time >= 3 and not arrow_buttons_hold_handled:
+                    arrow_buttons_hold_handled = True
+                    arrow_buttons_hold_time = 0
                     arrow_buttons_press_duration = 0
+                    arrow_buttons_press_start_time = time.time()
                     buzzer_control.start_toggle(0.5, 1, 1)
                     state_machine.change_state(StateMachineEnum.RECORD_STATE)
                     state_overlay.set_text("REC.")
@@ -350,8 +387,11 @@ def main():
                     print("[thread] -> RECORD_STATE", flush=True)
 
                 # Exiting
-                if exit_buttons_press_duration >= 3:
+                if exit_buttons_hold_time >= 3 and not exit_buttons_hold_handled:
+                    exit_buttons_hold_handled = True
+                    exit_buttons_hold_time = 0
                     exit_buttons_press_duration = 0
+                    exit_buttons_start_time = time.time()
                     buzzer_control.start_toggle(1, 1, 2)
                     time.sleep(0.5)
                     print("[thread] exit requested", flush=True)
@@ -517,4 +557,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
