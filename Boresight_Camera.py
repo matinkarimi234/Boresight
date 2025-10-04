@@ -254,7 +254,14 @@ def main():
                         overlay_display.center_on_screen(refresh=True)
                     else:
                         # back to 1× full frame
-                        #camera.center_zoom_step_at_sensor(1.0, zoom_anchor_sensor)
+                        anchor_sensor = zoom_anchor_sensor
+                        if anchor_sensor is None:
+                            nx_reset, ny_reset = overlay_display.reticle_norm_on_display()
+                            anchor_sensor = camera._display_to_sensor_forward(nx_reset, ny_reset)
+
+                        _, _, roi_reset = camera.center_zoom_step_at_sensor(1.0, anchor_sensor)
+                        if tuple(round(v, 6) for v in roi_reset) != (0.0, 0.0, 1.0, 1.0):
+                            camera.camera.zoom = (0.0, 0.0, 1.0, 1.0)
 
                         if zoom_anchor_sensor and zoom_anchor_dirty:
                             # place reticle at the correct 1× screen position of the world anchor
