@@ -15,6 +15,11 @@ OVERLAY_COLOR = (180, 0, 0, 255)
 # Add global variable to track button press duration
 ok_button_press_start_time = None
 ok_button_press_duration = 0
+ok_button_hold_time = 0
+ok_button_hold_handled = False
+ok_last_release_time = None
+DOUBLE_TAP_WINDOW = 0.4
+ok_double_tap_pending = False
 
 button_left_up_pressed = False
 button_right_down_pressed = False
@@ -33,21 +38,33 @@ def buttons_state_update_callback(flag):
     global ok_button_press_duration, ok_button_press_start_time, button_left_up_pressed
     global button_right_down_pressed, arrow_buttons_press_start_time, arrow_buttons_press_duration
     global button_ok_pressed, exit_buttons_press_duration, exit_buttons_start_time
+    global ok_button_hold_time, ok_button_hold_handled, ok_last_release_time
+    global ok_double_tap_pending
     """Callback to receive flags from ButtonControl."""
     
     if flag == ButtonControl.OK_PRESSED:
         button_ok_pressed = True;
         # Start a timer when the button is pressed
         ok_button_press_start_time = time.time()
+        ok_button_hold_time = 0
+        ok_button_hold_handled = False
         print("OK button pressed")
 
     elif flag == ButtonControl.OK_RELEASED:
         button_ok_pressed = False
         print("OK button released")
+        ok_button_hold_time = 0
         if ok_button_press_start_time:
-            ok_button_press_duration = time.time() - ok_button_press_start_time
-
+            now = time.time()
+            ok_button_press_duration = now - ok_button_press_start_time
             ok_button_press_start_time = None  # Reset the timer after release
+
+            if ok_last_release_time is not None and (now - ok_last_release_time) <= DOUBLE_TAP_WINDOW:
+                ok_double_tap_pending = True
+            else:
+                ok_double_tap_pending = False
+
+            ok_last_release_time = now
 
 
     elif flag == ButtonControl.LEFT_UP_BUTTON_PRESSED:
@@ -195,11 +212,18 @@ def main():
         global zoom_Step, button_ok_pressed
         global prezoom_reticle_px
         global current_zoom, zoom_anchor_sensor, zoom_anchor_dirty
+        global ok_button_hold_time, ok_button_hold_handled, ok_button_press_start_time
+        global ok_double_tap_pending, ok_last_release_time
 
         reticle_STEP = 1  # pixels per tick
         print("[thread] state machine loop entered", flush=True)
 
         while getattr(state_machine, "running", True):
+            if button_ok_pressed and ok_button_press_start_time is not None:
+                ok_button_hold_time = time.time() - ok_button_press_start_time
+            else:
+                ok_button_hold_time = 0
+
             current_state = state_machine.get_state()
             tick = 0.125  # default tick
 
@@ -211,8 +235,29 @@ def main():
                 print("[thread] -> NORMAL_STATE", flush=True)
 
             elif current_state == StateMachineEnum.NORMAL_STATE:
+                if ok_double_tap_pending:
+                    ok_double_tap_pending = False
+                    overlay_display.center_on_screen(refresh=True)
+                    overlay_display.save_offset()
+                    if current_zoom > 1:
+                        nx, ny = overlay_display.reticle_norm_on_display()
+                        rx, ry, rw, rh = camera.camera.zoom
+                        u, v = camera._display_to_sensor_forward(nx, ny)
+                        sx = rx + u * rw
+                        sy = ry + v * rh
+                        zoom_anchor_sensor = (sx, sy)
+                        zoom_anchor_dirty = True
+
                 # Enter H adjust
-                if ok_button_press_duration >= 3 and exit_buttons_press_duration == 0:
+                if (
+                    ok_button_hold_time >= 3
+                    and not ok_button_hold_handled
+                    and exit_buttons_press_duration == 0
+                ):
+                    ok_button_press_duration = 0
+                    ok_button_hold_handled = True
+                    ok_button_hold_time = 0
+                    ok_button_press_start_time = time.time()
                     ok_button_press_duration = 0
                     buzzer_control.start_toggle(0.5, 1, 1)
                     state_machine.change_state(StateMachineEnum.HORIZONTAL_ADJUSTMENT)
@@ -341,6 +386,21 @@ def main():
                 if button_right_down_pressed:
                     overlay_display.nudge_vertical(+reticle_STEP)
 
+                if ok_double_tap_pending:
+                    current_x, current_y = overlay_display.get_center()
+                    new_x = overlay_display.desired_res[0] // 2
+                    overlay_display.set_center(new_x, current_y, refresh=True)
+                    overlay_display.save_offset()
+                    if current_zoom > 1:
+                        nx, ny = overlay_display.reticle_norm_on_display()
+                        rx, ry, rw, rh = camera.camera.zoom
+                        u, v = camera._display_to_sensor_forward(nx, ny)
+                        sx = rx + u * rw
+                        sy = ry + v * rh
+                        zoom_anchor_sensor = (sx, sy)
+                        zoom_anchor_dirty = True
+                    ok_double_tap_pending = False
+
                 if current_zoom > 1:
                     nx, ny = overlay_display.reticle_norm_on_display()
                     rx, ry, rw, rh = camera.camera.zoom
@@ -351,8 +411,11 @@ def main():
                     zoom_anchor_dirty = True
 
                 tick = 0.02
-                if ok_button_press_duration > 0:
+                if ok_button_hold_time >= 3:
                     ok_button_press_duration = 0
+                    ok_button_hold_time = 0
+                    ok_button_press_start_time = time.time()
+
                     buzzer_control.start_toggle(0.25, 1, 1)
                     state_overlay.set_text("V ADJ.")
                     state_machine.change_state(StateMachineEnum.VERTICAL_ADJUSTMENT)
@@ -364,6 +427,21 @@ def main():
                 if button_right_down_pressed:
                     overlay_display.nudge_horizontal(+reticle_STEP)
 
+                if ok_double_tap_pending:
+                    current_x, current_y = overlay_display.get_center()
+                    new_y = overlay_display.desired_res[1] // 2
+                    overlay_display.set_center(current_x, new_y, refresh=True)
+                    overlay_display.save_offset()
+                    if current_zoom > 1:
+                        nx, ny = overlay_display.reticle_norm_on_display()
+                        rx, ry, rw, rh = camera.camera.zoom
+                        u, v = camera._display_to_sensor_forward(nx, ny)
+                        sx = rx + u * rw
+                        sy = ry + v * rh
+                        zoom_anchor_sensor = (sx, sy)
+                        zoom_anchor_dirty = True
+                    ok_double_tap_pending = False
+
                 if current_zoom > 1:
                     nx, ny = overlay_display.reticle_norm_on_display()
                     rx, ry, rw, rh = camera.camera.zoom
@@ -375,12 +453,15 @@ def main():
 
 
                 tick = 0.02
-                if ok_button_press_duration > 0:
+                if ok_button_hold_time >= 3:
                     ok_button_press_duration = 0
+                    ok_button_hold_time = 0
                     led_control.stop()
                     buzzer_control.start_toggle(0.5, 1, 1)
                     state_overlay.set_text("LIVE")
                     state_machine.change_state(StateMachineEnum.NORMAL_STATE)
+                    ok_button_hold_handled = True
+                    ok_button_press_start_time = time.time()
                     print("[thread] -> NORMAL_STATE", flush=True)
 
             elif current_state == StateMachineEnum.SAVING_VIDEO_STATE:
