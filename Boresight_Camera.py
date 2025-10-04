@@ -280,24 +280,6 @@ def main():
                         zoom_anchor_dirty = False
                         prezoom_reticle_px = None
 
-                if current_state in (StateMachineEnum.HORIZONTAL_ADJUSTMENT, StateMachineEnum.VERTICAL_ADJUSTMENT) and current_zoom > 1:
-                    # reticle position on the display (already inverted for 180 by your overlay)
-                    nx, ny = overlay_display.reticle_norm_on_display()
-
-                    # current ROI = camera.camera.zoom (x, y, w, h) in SENSOR-normalized
-                    rx, ry, rw, rh = camera.camera.zoom
-
-                    # Convert (nx, ny) display → ROI space → SENSOR (with your overlay inversion, u/v ≈ nx/ny)
-                    # To be precise across rotations/flips we still pass through your helper:
-                    u, v = camera._display_to_sensor_forward(nx, ny)  # pre-orientation normalized
-                    sx = rx + u * rw
-                    sy = ry + v * rh
-
-                    zoom_anchor_sensor = (sx, sy)
-                    zoom_anchor_dirty = True
-                    # Optionally re-center ROI on new anchor to keep the view aligned
-                    camera.center_zoom_step_at_sensor(current_zoom, zoom_anchor_sensor)
-
                 # GOTO RECORDING STATE
                 if arrow_buttons_press_duration >= 3:
                     arrow_buttons_press_duration = 0
@@ -343,6 +325,17 @@ def main():
                     overlay_display.nudge_vertical(-reticle_STEP)
                 if button_right_down_pressed:
                     overlay_display.nudge_vertical(+reticle_STEP)
+
+                if current_zoom > 1:
+                    nx, ny = overlay_display.reticle_norm_on_display()
+                    rx, ry, rw, rh = camera.camera.zoom
+                    u, v = camera._display_to_sensor_forward(nx, ny)
+                    sx = rx + u * rw
+                    sy = ry + v * rh
+                    zoom_anchor_sensor = (sx, sy)
+                    zoom_anchor_dirty = True
+                    camera.center_zoom_step_at_sensor(current_zoom, zoom_anchor_sensor)
+
                 tick = 0.02
                 if ok_button_press_duration > 0:
                     ok_button_press_duration = 0
@@ -356,6 +349,18 @@ def main():
                     overlay_display.nudge_horizontal(-reticle_STEP)
                 if button_right_down_pressed:
                     overlay_display.nudge_horizontal(+reticle_STEP)
+
+                if current_zoom > 1:
+                    nx, ny = overlay_display.reticle_norm_on_display()
+                    rx, ry, rw, rh = camera.camera.zoom
+                    u, v = camera._display_to_sensor_forward(nx, ny)
+                    sx = rx + u * rw
+                    sy = ry + v * rh
+                    zoom_anchor_sensor = (sx, sy)
+                    zoom_anchor_dirty = True
+                    camera.center_zoom_step_at_sensor(current_zoom, zoom_anchor_sensor)
+
+                    
                 tick = 0.02
                 if ok_button_press_duration > 0:
                     ok_button_press_duration = 0
