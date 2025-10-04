@@ -379,7 +379,6 @@ def main():
                     arrow_buttons_hold_handled = True
                     arrow_buttons_hold_time = 0
                     arrow_buttons_press_duration = 0
-                    arrow_buttons_press_start_time = time.time()
                     buzzer_control.start_toggle(0.5, 1, 1)
                     state_machine.change_state(StateMachineEnum.RECORD_STATE)
                     state_overlay.set_text("REC.")
@@ -391,7 +390,6 @@ def main():
                     exit_buttons_hold_handled = True
                     exit_buttons_hold_time = 0
                     exit_buttons_press_duration = 0
-                    exit_buttons_start_time = time.time()
                     buzzer_control.start_toggle(1, 1, 2)
                     time.sleep(0.5)
                     print("[thread] exit requested", flush=True)
