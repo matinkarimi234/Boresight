@@ -391,7 +391,7 @@ def main():
                     exit_buttons_hold_time = 0
                     exit_buttons_press_duration = 0
                     buzzer_control.start_toggle(1, 1, 2)
-                    time.sleep(0.5)
+                    time.sleep(3)
                     print("[thread] exit requested", flush=True)
                     os._exit(0)
 
