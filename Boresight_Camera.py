@@ -266,8 +266,23 @@ def main():
                         if zoom_anchor_sensor and zoom_anchor_dirty:
                             # place reticle at the correct 1× screen position of the world anchor
                             nx1, ny1 = camera._sensor_to_display_inverse(*zoom_anchor_sensor)
-                            x_px = int(nx1 * overlay_display.disp_width)  - overlay_display.offset_x
-                            y_px = int(ny1 * overlay_display.disp_height) - overlay_display.offset_y
+
+                            # convert back to display space (undo the 180° flip applied elsewhere)
+                            nx_disp = 1.0 - nx1
+                            ny_disp = 1.0 - ny1
+
+                            # clamp to display-normalized bounds before converting to overlay pixels
+                            nx_disp = 0.0 if nx_disp < 0.0 else (1.0 if nx_disp > 1.0 else nx_disp)
+                            ny_disp = 0.0 if ny_disp < 0.0 else (1.0 if ny_disp > 1.0 else ny_disp)
+
+                            x_px = int(round(nx_disp * overlay_display.disp_width)) - overlay_display.offset_x
+                            y_px = int(round(ny_disp * overlay_display.disp_height)) - overlay_display.offset_y
+
+                            # ensure we hand overlay-local pixel coords to set_center
+                            W, H = overlay_display.desired_res
+                            x_px = max(0, min(W - 1, x_px))
+                            y_px = max(0, min(H - 1, y_px))
+
                             overlay_display.set_center(x_px, y_px, refresh=True)
                             overlay_display.save_offset()   # persist the new zero-zoom position
                         else:
