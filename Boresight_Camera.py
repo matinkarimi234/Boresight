@@ -334,7 +334,6 @@ def main():
                     sy = ry + v * rh
                     zoom_anchor_sensor = (sx, sy)
                     zoom_anchor_dirty = True
-                    camera.center_zoom_step_at_sensor(current_zoom, zoom_anchor_sensor)
 
                 tick = 0.02
                 if ok_button_press_duration > 0:
@@ -358,9 +357,8 @@ def main():
                     sy = ry + v * rh
                     zoom_anchor_sensor = (sx, sy)
                     zoom_anchor_dirty = True
-                    camera.center_zoom_step_at_sensor(current_zoom, zoom_anchor_sensor)
 
-                    
+
                 tick = 0.02
                 if ok_button_press_duration > 0:
                     ok_button_press_duration = 0
