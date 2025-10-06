@@ -176,14 +176,14 @@ def main():
                         font_size=36,
                         pos=('left', 'bottom'),
                         color= OVERLAY_COLOR,
-                        offset=(20, 20))
+                        offset=(10, 20))
 
     calender_overlay = TextOverlay(layer=2003,
                         font_path="Fonts/Tw_Cen_Condensed.ttf",
                         font_size=36,
                         pos=('left', 'bottom'),
                         color= OVERLAY_COLOR,
-                        offset=(20, 80))
+                        offset=(10, 80))
 
 
     state_overlay = TextOverlay(layer=2004,
@@ -196,7 +196,7 @@ def main():
     
     cpu_temp_overlay = TextOverlay(layer=2003,
                         font_path="Fonts/Tw_Cen_Condensed.ttf",
-                        font_size=36,
+                        font_size=24,
                         pos=('right', 'top'),
                         color= OVERLAY_COLOR,
                         offset=(20, 80))
