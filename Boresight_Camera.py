@@ -542,7 +542,7 @@ def main():
                 clock_overlay.set_text(now_time)
                 calender_overlay.set_text(jdate_str)
 
-                cpu_temp_overlay.set_text()
+                cpu_temp_overlay.set_text(cpu_temp_str)
                 # heartbeat
                 # print(f"[hb] {now}", flush=True)
 
