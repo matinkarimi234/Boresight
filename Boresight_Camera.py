@@ -176,7 +176,7 @@ def main():
                         font_size=36,
                         pos=('left', 'bottom'),
                         color= OVERLAY_COLOR,
-                        offset=(20, 80))
+                        offset=(20, 20))
 
     calender_overlay = TextOverlay(layer=2003,
                         font_path="Fonts/Tw_Cen_Condensed.ttf",
@@ -536,7 +536,7 @@ def main():
             now_time = dt.strftime("%H:%M:%S")
             jdate_str = jdatetime.datetime.fromgregorian(datetime = dt).strftime('%Y/%m/%d')
             cpu_temp = get_cpu_temp()
-            cpu_temp_str = f"T: {cpu_temp}°C"
+            cpu_temp_str = f"Temp: {cpu_temp}°C"
             if now_time != last_sec:
                 last_sec = now_time
                 clock_overlay.set_text(now_time)
