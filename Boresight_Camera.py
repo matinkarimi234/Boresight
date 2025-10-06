@@ -10,6 +10,8 @@ from Record_Manager import MetadataRecorder,RecordingManager
 import os
 import sys
 
+from CPU_Temp import get_cpu_temp
+
 OVERLAY_COLOR = (180, 0, 0, 255)
 
 # Add global variable to track button press duration
@@ -179,7 +181,7 @@ def main():
     calender_overlay = TextOverlay(layer=2003,
                         font_path="Fonts/Tw_Cen_Condensed.ttf",
                         font_size=36,
-                        pos=('right', 'bottom'),
+                        pos=('left', 'bottom'),
                         color= OVERLAY_COLOR,
                         offset=20)
 
@@ -191,8 +193,16 @@ def main():
                         pos=('right', 'top'),
                         color= OVERLAY_COLOR,
                         offset=20)
+    
+    cpu_temp_overlay = TextOverlay(layer=2003,
+                        font_path="Fonts/Tw_Cen_Condensed.ttf",
+                        font_size=36,
+                        pos=('right', 'top'),
+                        color= OVERLAY_COLOR,
+                        offset=20)
 
-    static_png = StaticPNGOverlay("Pictures/Farand_Logo.png", layer=2005,
+
+    static_png = StaticPNGOverlay("Pictures/Farand_Logo.png", layer=2006,
                               pos=('left','top'),
                               scale=0.35,
                               offset=20)
@@ -525,10 +535,14 @@ def main():
             # Clock update once per second
             now_time = dt.strftime("%H:%M:%S")
             jdate_str = jdatetime.datetime.fromgregorian(datetime = dt).strftime('%Y/%m/%d')
+            cpu_temp = get_cpu_temp()
+            cpu_temp_str = f"Temperature: {cpu_temp}° C"
             if now_time != last_sec:
                 last_sec = now_time
                 clock_overlay.set_text(now_time)
                 calender_overlay.set_text(jdate_str)
+
+                cpu_temp_overlay.set_text()
                 # heartbeat
                 # print(f"[hb] {now}", flush=True)
 
