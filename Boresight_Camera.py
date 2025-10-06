@@ -166,7 +166,7 @@ def main():
     # If left/right feels reversed on your rig, 'inverse' fixes it. Use 'forward' otherwise.
     camera.set_mapping_mode('inverse')
 
-    # 🔧 Make sure overlays are transparent where there’s no drawing
+    # Make sure overlays are transparent where there’s no drawing
     # (OverlayDisplay already draws with alpha=0 background; ContainerOverlay below uses semi-alpha)
     side_bars = ContainerOverlay(bar_width=150, layer=2001, alpha=150)
     side_bars.show()
@@ -176,14 +176,14 @@ def main():
                         font_size=36,
                         pos=('left', 'bottom'),
                         color= OVERLAY_COLOR,
-                        offset=20)
+                        offset=(20, 20))
 
     calender_overlay = TextOverlay(layer=2003,
                         font_path="Fonts/Tw_Cen_Condensed.ttf",
                         font_size=36,
                         pos=('left', 'bottom'),
                         color= OVERLAY_COLOR,
-                        offset=20)
+                        offset=(20, 20))
 
 
     state_overlay = TextOverlay(layer=2004,
@@ -192,14 +192,14 @@ def main():
                         font_size=36,
                         pos=('right', 'top'),
                         color= OVERLAY_COLOR,
-                        offset=20)
+                        offset=(20, 20))
     
     cpu_temp_overlay = TextOverlay(layer=2003,
                         font_path="Fonts/Tw_Cen_Condensed.ttf",
                         font_size=36,
                         pos=('right', 'top'),
                         color= OVERLAY_COLOR,
-                        offset=20)
+                        offset=(20, 20))
 
 
     static_png = StaticPNGOverlay("Pictures/Farand_Logo.png", layer=2006,
@@ -272,7 +272,7 @@ def main():
             tick = 0.125  # default tick
 
             if current_state == StateMachineEnum.START_UP_STATE:
-                buzzer_control.start_toggle(0.25, 0.25, 1)
+    
                 buzzer_control.start_toggle(0.1, 0.1, 2)
                 state_machine.change_state(StateMachineEnum.NORMAL_STATE)
                 state_overlay.set_text("LIVE")
@@ -536,7 +536,7 @@ def main():
             now_time = dt.strftime("%H:%M:%S")
             jdate_str = jdatetime.datetime.fromgregorian(datetime = dt).strftime('%Y/%m/%d')
             cpu_temp = get_cpu_temp()
-            cpu_temp_str = f"Temperature: {cpu_temp}° C"
+            cpu_temp_str = f"T: {cpu_temp}°C"
             if now_time != last_sec:
                 last_sec = now_time
                 clock_overlay.set_text(now_time)

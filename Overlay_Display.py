@@ -465,6 +465,14 @@ class TextOverlay:
         self.font = ImageFont.truetype(font_path, font_size)
         self.color = color
         self.pos = pos
+        # Updated the TextOverlay HUD class to accept independent horizontal and vertical offsets so stacked overlays can share an edge without shifting sideways
+        if isinstance(offset, (tuple, list)) and len(offset) == 2:
+            self.offset_x = offset[0]
+            self.offset_y = offset[1]
+        else:
+            self.offset_x = offset
+            self.offset_y = offset
+
         self.offset = offset
 
         self.rec_indicator = rec_indicator
@@ -513,18 +521,18 @@ class TextOverlay:
 
         # group-aligned positions
         x_positions = {
-            'left': self.offset,
+            'left': self.offset_x,
             'center': (self.disp_w - total_w) // 2,
-            'right': self.disp_w - total_w - self.offset
+            'right': self.disp_w - total_w - self.offset_x
         }
         y_positions = {
-            'top': self.offset,
+            'top': self.offset_y,
             'center': (self.disp_h - h) // 2,
-            'bottom': self.disp_h - h - self.offset
+            'bottom': self.disp_h - h - self.offset_y
         }
 
-        gx = self.pos[0] + self.offset if isinstance(self.pos[0], int) else x_positions.get(self.pos[0], self.offset)
-        gy = self.pos[1] + self.offset if isinstance(self.pos[1], int) else y_positions.get(self.pos[1], self.offset)
+        gx = self.pos[0] + self.offset_x if isinstance(self.pos[0], int) else x_positions.get(self.pos[0], self.offset_x)
+        gy = self.pos[1] + self.offset_y if isinstance(self.pos[1], int) else y_positions.get(self.pos[1], self.offset_y)
 
         text_x = gx + (dot_diam + gap if show_rec else 0)
         text_y = gy
